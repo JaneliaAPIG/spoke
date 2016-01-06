@@ -2165,13 +2165,13 @@ classdef SpikeGrid < most.Model
             totalReusedLines = 0;
             
             %totalClearedSpikes = 0;
-            for i=obj.tabChanNumbers
+            for i=obj.tabChanNumbers %the channel numbers for the currently selected tab
                 
                 if isempty(obj.spikeData{i})
                     continue;
                 end
                 
-                plotIdx = mod(i-1,obj.PLOTS_PER_TAB) + 1;
+                plotIdx = mod(i-1,obj.PLOTS_PER_TAB) + 1; %Idxs into the plot object value 
                 
                 numNewSpikes = length(obj.spikeData{i}.scanNums);
                 totalNewSpikes = totalNewSpikes + numNewSpikes;
@@ -2183,6 +2183,7 @@ classdef SpikeGrid < most.Model
                 newSpikeCounts = obj.lastPlottedSpikeCount(i) + (1:numNewSpikes);
                 lineIdxs = mod(newSpikeCounts,obj.spikesPerPlot) + 1; %The line object indices to use for these newly detected spikes
                 
+                resetPlotCount = 0;
                 for j=1:numNewSpikes
                     
                     waveform = obj.spikeData{i}.waveforms{j};
@@ -2206,15 +2207,25 @@ classdef SpikeGrid < most.Model
                     end
                     
                     %If all lines have been used for this channel, handle spikesPerPlotClearMode = 'all'
-                    if mod(lineIdxs(j)-1,obj.spikesPerPlot) == 0 && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
+                    if lineIdxs(j) == obj.spikesPerPlot && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
                         for k=1:length(obj.hSpikeLines{i})
-                            obj.hSpikeLines{i}(k).XData = [];
-                            obj.hSpikeLines{i}(k).YData = [];
+                            obj.hSpikeLines{plotIdx}(k).XData = [];
+                            obj.hSpikeLines{plotIdx}(k).YData = [];
                         end
+                        
+                        resetPlotCount = resetPlotCount + 1;                        
                     end
+                                        
+                    %Determine line object indexes after adjusting for possible reset
+                    if resetPlotCount > 0 
+                        idxs = lineIdxs(j) - (resetPlotCount * obj.spikesPerPlot) + 1;
+                    else
+                        idxs = lineIdxs;
+                    end                    
                     
-                    obj.hSpikeLines{i}(lineIdxs(j)).XData = xData;
-                    obj.hSpikeLines{i}(lineIdxs(j)).YData = waveform;                   
+                    %Update line objects with waveform for currrent spike
+                    obj.hSpikeLines{plotIdx}(idxs(j)).XData = xData;
+                    obj.hSpikeLines{plotIdx}(idxs(j)).YData = waveform;                   
                     obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;
                     
                     %                     if length(obj.hSpikeLines{i}) < obj.spikesPerPlot %Create new line object
@@ -2456,6 +2467,7 @@ classdef SpikeGrid < most.Model
             
             redrawThresholdLines = false;
             
+            %TODO: Verify the use of min(obj.PLOTS_PER_TAB,numel(obj.hThresholdLines{1}))
             for i=1:length(displaysToClear)
                 for j=1:min(obj.PLOTS_PER_TAB,numel(obj.hThresholdLines{1}))
                     
