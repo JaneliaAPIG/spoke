@@ -1,10 +1,6 @@
 Spoke
 =========
 
-<br>
-#### *SpikeGLX is a new and improved SpikeGL*
-<br>
-
 [Spoke](https://github.com/jamesjun/spoke) is a MATLAB app for live display of neural 
 spike data obtained using the [SpikeGLX] (https://github.com/billkarsh/SpikeGLX) neural 
 recording software. Spoke & SpikeGLX are compatible with the Whisper extracellular recording 
@@ -21,5 +17,5 @@ Spoke is developed/maintained by the APIG Lab at HHMI/Janelia Research Campus.
 ### Credits
 Vijay Iyer: (HHMI/Janelia Scientific Computing) Initial implementation 
 Bill Karsh: (HHMI/Janelia APIG) MATLAB interface to SpikeGLX
-James Jun: (HHMI/Janelia APIG) Current owner
-Edward Kang: (Contractor) Current owner
+James Jun: (HHMI/Janelia APIG) Current lead
+Edward Kang: (Contractor) Current lead
