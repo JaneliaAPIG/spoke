@@ -3,7 +3,18 @@ function spoke()
 
 % make the spoke main controller object
 
-hGrid = spoke.SpikeGrid('10.102.20.125');
+if nargin == 0
+   [~,s] = system('ipconfig /all');
+   
+   out = regexp(s,'IPv4 Address[^1-9]*([.1-9]*)','tokens');
+   assert(numel(out) > 0, 'Unable to determine the IP address for this machine');
+   ipAddress = out{1};
+   sprintf('Detected local IP Address %s. Connecting to the SpikeGL Remote Connection server.',ipAddress);
+end
+    
+    
+
+hGrid = spoke.SpikeGrid(ipAddress);
 hGridCtl = spoke.SpikeGridController(hGrid);
 
 assignin('base','hGrid',hGrid);
