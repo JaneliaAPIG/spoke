@@ -1,0 +1,2688 @@
+classdef SpikeGrid < most.Model
+    %SPIKEGRID Summary of this class goes here
+    %
+    %% NOTES
+    %  Timer function collects all available new data and detects spikes
+    %  within the new batch of data, excluding the final post-pulse interval,
+    %  and imposing a 'refractory' period after each spike also equal to the
+    %  plot width post-pulse interval (i.e. no 'colliding' spikes can be detected)
+    %
+    %  At each timer period, the final pre+post pulse interval is retained
+    %  and kept for the subsequent timer period. This ensures there is full
+    %  pre-pulse data for any spikes detected early in the next timer
+    %  period's batch.
+    %
+    %  The spike scan numbers from previous batch are available in the spike
+    %  detection function to prevent duplicate spike detection, i.e. in the
+    %  case that a spike in occurred in the final pre-pulse period of the
+    %  previous buffer, which gets re-checked in the next timer period.
+    %
+    %  The 'gating channel' implementation relies on gatedScans
+    %  property/state. Whenever a gating event is detected this state is
+    %  non-empty. New data is processed until this gate is traversed and then
+    %  the gating state is cleared. No new spikes are stored and gating
+    %  detection is resumed. When a new gating event is detected, spikes are
+    %  again stored for plotting. Note that gatedScans can cross
+    %  refreshPeriod chunks; the scans marked at a previous chunk will be
+    %  stored (if spikes are found) in any subsequent chunks.
+    %
+    %  Mean subtraction is supported in a few different senses. First, there
+    %  is the 'global mean subtraction' option which takes the mean value
+    %  across all channels from the last refresh period and subtracts it from
+    %  all channels. This is meant to remove any global offsets, but may be
+    %  sensitive to spiking activity on various channels. There is also 'per
+    %  channel' mean subtraction in two ways. First, if highpass filtering is
+    %  enabled, then mean subtraction occurs ipso facto. Second, if the
+    %  'rmsMultiple' option is used for /either/ the thresholdType or the
+    %  spikeAmpUnits, then mean subtraction is done explicitly or implicitly.
+    %
+    %  Spike rastergram display is supported, as an orthogonal mode to spike
+    %  waveform display (displayMode property). In this mode, spike timing is
+    %  displayed relative to an auxiliary stimulus channel.
+    %
+    %  For spike rastergram, at present, a single line object is used for
+    %  each channel. Data for the display is refreshed at each timer interval
+    %  when new spikes are available, i.e. when raster data is augmented.
+    %  Tests showed that using data linking was faster (can't remember how
+    %  much!) than replotting from scratch each time, so this is used. It was
+    %  felt that a single line would work, because only a limited number of
+    %  stimuli were expected to be plotted (at a time). However, if # of stimuli grow
+    %  very large, and all are to be displayed, we may need to revisit this.
+    %
+    % Stimulus Classification
+    %   Stimulus events can be classified into event types, so that
+    %   rastergram/PSTH displays show only or otherwise identify spikes
+    %   associated with stimuli of particular event type. To use stimulus
+    %   event classification, user must supply a function
+    %   (stimEventClassifyFcn). This function accepts 1 input argument, which
+    %   is supplied data acquired on the stimEventClassifyChannel for several
+    %   samples (scans) immediately following stimulus detection (on the
+    %   stimStartChannel). Function must also handle case of 0 input
+    %   arguments. In this case, function returns a structure providing
+    %   information about the stimulus event classification, e.g. the
+    %   eventTypeNames. See stimEventClassifyFcn_model for example usage and
+    %   further details.
+    %
+    
+    
+    %% PUBLIC PROPERTIES
+    properties (SetObservable)
+        
+        refreshRate = 5; %Refresh rate, in Hz, at which data is reviewed and newly detected spikes are plotted
+        
+        thresholdType = 'rmsMultiple'; %One of {'volts' 'rmsMultiple'}. If rmsMultiple is specified, it is assumed that signals' DC is already filtered.
+        thresholdVal = 5; %Threshold, in volts or SD units, to use for spike detection
+        thresholdAbsolute = false; % Logical indicating whether threshold should be considered an absolute value
+        thresholdRMSRefreshPeriod = 2; %Period, in seconds, at which RMS value is recomputed for 'rmsMultiple' threshold detection
+        thresholdRMSRefreshOnRetrigger = true; %Logical indicating whether RMS value should be recomputed on SpikeGL 'retriggers' (applies for 'rmsMultiple' threshold detection)
+        
+        gatingChannel = []; %Channel number (zero-indexed) to use as gate signal. This is /always/ an auxiliary, non-pad channel.
+        gatingThreshold = 0; %Value, in volts, to use for gating signal (TODO: Implement in volts -- it's in A/D units at moment)
+        gatingDuration = 200; %Time, in seconds, to plot for each gate signal threshold-crossing
+        
+        globalMeanSubtraction = false; %Logical indicating whether to compute/apply global mean subtraction
+        
+        dataReadMode = 'file'; %One of {'file' 'spikeGL'}. Specifies whether to read data from file (faster, but assumes only one file) or via spikeGL function.
+        
+        filterWindow = [0 inf]; %Frequency range in Hz allowed to pass, using a 1-pole Butterworth bandpass filter
+        
+        tabDisplayed = 1; %Number of 'tab' -- a batch of (PLOTS_PER_TAB) channels -- currently diplayed in the spike waveform grid.
+        
+        displayMode = 'waveform'; %One of {'waveform' 'raster'}. Specifies type of information to display on plot grid.
+        
+        %Spike waveform display properties
+        spikeTimeWindow = [-1 2] * 1e-3; %2 element vector ([pre post]) indicating times, in seconds, to display before and after threshold crossing
+        spikeAmpUnits = 'volts'; %One of {'volts' 'rmsMultiple'} indicating units to use for spike plot display. Value of 'rmsMultiple' only available if thresholdType='rmsMultiple'
+        %spikeAmpWindow = [-4000 4000];
+        
+        spikesPerPlot = 100; %Number of sweeps to display in each grid figure
+        spikesPerPlotClearMode = 'oldest'; %One of {'all' 'oldest'}
+        spikePlotClearPeriod = inf; % (TODO) Time, in seconds, after which to clear all or oldest spike if no spikes have been received
+        
+        %Raster/PSTH display properties
+        stimStartChannel = []; %Channel number (zero-indexed) to use for signaling start of stim
+        stimStartThreshold = 0.5; %Value, in volts, to use for stim start signal
+        stimTimeWindow = [-1 1]; %2 element vector ([pre post]) indicating times, in seconds, to display before and after stim start threshold crossing in raster/psth plots
+        stimNumDisplayRange = [1 inf]; %2 element vector indicating which stim numbers to display, counted from last start/reset. Set second element to Inf to specify all stimuli should be displayed.
+        stimNumDisplayRangeInfIncrement = 20; %When stimNumDisplayRange(2)=Inf, specify the increment in which the number of stimuli displayed are incremented by.
+        stimEventTypeDisplayed = {}; %String or string cell array indicating which event type(s) to display raster/PSTH data for.
+        
+        spikeRefractoryPeriod = 2e-3; %Time, in seconds, to prevent detection of spike following previously detected spike. When displayMode='waveform', this value is given by second element of spikeTimeWindow.
+        
+        psthTimeBin = 10e-3; %Time, in seconds, over which to bin spikes for PSTH summary plot
+        psthAmpRange = [0 120]; %Amplitude range to display, in units of spikes/second
+        
+        psthTimerPeriod = inf; %Period, in seconds, at which plotPSTH() method is called automatically when displayMode='raster'
+        
+        channelSubset = inf; %Subset of channels to acquire from
+        
+    end
+    
+    properties (SetObservable, Transient)
+        stimEventClassifyFcn = []; %Function handle specifying function used to classify stimuli into event types. See class notes for further information.
+    end
+    
+    properties (SetObservable, Dependent)
+        spikeAmpWindow; %2 element vector ([min max]) indicating voltage bounds or RMSMultiple (depending on thresholdType) for each spike plot
+        refreshPeriodMaxSpikeRate = inf; %Maximum spike rate (Hz) to detect/plot at each refresh period; spikes above this rate are discarded
+        numAuxChans; %Number of auxiliary
+    end
+    
+    properties (Dependent)
+        numChans;
+        numTabs;
+        stimEventCount; %Count of stimuli that have been detected since start/restart/rollover at current stimEventTypeDisplayed (when displayMode='raster')
+    end
+    
+    %Following are determined at start of acquisition, via the
+    %stimEventClassifyFcn (no arg case). This function must return a structure
+    %with fields stimEventTypes & stimEventClassifyTime.
+    properties (SetAccess=protected)
+        stimEventTypes; %String cell array indicating names of distinct event types which can be signaled by stimulus start pulse. If empty, event Classify is not used
+        stimEventClassifyNumScans = 0; %Number of scans required to classify event type using stimulus start signal.
+        stimEventClassifyChannel = []; %SpikeGL (demuxed) channel number containing signal used for stimulus event classification (immediately following stimulus detection). Must be an auxiliary channel. If empty, the stimStartChannel is used.
+        
+        stimTotalCount = 0; %Count of stimuli that have been detected since start/restart/rollover, for /all/ stimEventTypes (when displayMode='raster')
+        
+        configFileName = ''; %Full filename (incl. path) of last-saved/loaded config file, if any
+    end
+    
+    properties (SetAccess=private,SetObservable)
+        running = false;
+    end
+    
+    %% HIDDEN PROPERTIES
+    
+    properties (Hidden)
+        maxBufSizeSeconds = 1;
+    end
+    
+    
+    properties (Hidden,SetAccess=protected)
+        hSGL; %Handle to SpikeGLX object
+        sglParamCache; %cached SpikeGL parameters
+        sglChanSubset; %subset of SpikeGL channels to acquire from
+        
+        hTimer; %Timer to use for periodically checking Spoke's input data stream
+        hPSTHTimer; %Timer to periodically call plotPSTH() method
+        
+        %Following structs have 3 keys {'waveform' 'raster' 'psth'}
+        hFigs; %Struct of handles to grid figure
+        hPanels; %Struct of handles to subpanels in grid figure, one for each channel per tab
+        hChanLabels; %Struct of arrays of text labels, identifying each channel
+        
+        %Handle graphics specific to waveform display
+        hPlots; %Array of axes handles, one for each axes in grid
+        hThresholdLines; %Cell array of line handles, marking threshold level for each plot in grid
+        hSpikeLines; %Cell array of handles to line objects for each plotted spike waveform
+        
+        %Handle graphics specific to raster display
+        hRasters; %Array of axes handles, one for each axes in grid
+        hPSTHs; %Array of axes handles, one for each axes in grid
+        
+        
+        numActiveTabs;
+        
+        thresholdRMS; %Array of RMS values, one per channel, computed from all non-spike-window scans from within last thresholdRMSTime
+        thresholdMean; %Array of mean values, one per channel, computed from all non-spike-window scans from within last thresholdRMSTime
+        thresholdRMSLastScan = 0; %Last scan number at which threshold RMS value was updated
+        
+        spikeData = {}; %Cell array, one cell per channel, of structures containing data for each detected spike -- scan number, waveform data. For waveform mode, spikeData gets cleared with each set of newly detected spikes.
+        spikeCount = []; %Scalar array specifying number of spikes detected per channel since start()
+        lastPlottedSpikeCount = []; %Scalar array specifying the spike count, for each channel that's been last plotted
+        
+        %globalMean; %Global mean value across acquisition channels, computed from all non-spike-window scan from within last thresholdRMSTime, if globalMeanSubtraction=true is nonempty
+        
+        %thresholdRMSExcludedScans; %Array of numbers, one per channel, indicating number of scans included into RMS calculation, from within last thresholdRMSTime
+        %thresholdRMSNumSamples;
+        
+        totalBytesPerScan; %Number of bytes per 'scan' -- one sample on each of the channels
+        bufScanNumEnd; %Scan number of the last element in the spikeDataBuffer
+        spikeDataBuffer;
+        
+        gatedScans; %Empty array, if no gating window is active, or 1x2 array specifying [start stop] scan numbers, inclusive during which spikes should be plotted
+        
+        voltageScaleFactor; %Scaling factor between A/D values and voltage
+        
+        filterCoefficients = {}; %Cell array of a,b filter coefficients for current filterWindow
+        filterCondition; %Maintain 'initial condition' of filter between calls to filter()
+        
+        tabChanNumbers; %Array of pad channel numbers (one-based) for currently specified tabDisplayed value
+        
+        blockTimer = false; %Flag used to block timer callback actions during certain operations
+        
+        maxReadableScanNum = 0; %Maximum scan number in currently logged-to file counted since start of acquisition (count uninterrupted across start & retrigger gaps)
+        lastMaxReadableScanNum = 0;  %Value of maximum scan number in currently logged-to file, measured from start of file, at /last/ timer period
+        priorfileMaxReadableScanNum = 0; %Value of maximum scan number, measured from start of acquisition (uninterrupted count), reached for /prior/ file
+        
+        %Following arrays are all the same length (could be a structure, but kept separate for ease of access/indexing)
+        stimScanNums; %Array of scan numbers corresponding to detected stimulus edges
+        stimWindowStartScanNums; %Array of scan numbers marking starting edge of stimulus display events
+        stimWindowEndScanNums; %Array of scan numbers marking ending edge of stimulus display events
+        stimEventTypeNames = {}; %Cell string array of event type names
+        
+        stimNumsPlotted; %Structure array, of size numChans and with fields given by stimEventTypeNames, indicating number of stims that have been plotted so far for each event
+        stimLastEventScanNumWindow; %1x2 array indicating start/end scan numbers for last stimulus trial
+        
+        stimEventCount_; %Struct var containing stimEventCount value for each of the stimEventTypes_
+        
+        refreshPeriodMaxNumSpikes = inf; %Maximum number of spikes to detect/plot during a given refresh period
+        
+        bmarkReadTimeStats = zeros(3,1); %Array of [mean std n]
+        bmarkPreProcessTimeStats = zeros(3,1);; %Array of [mean std n]
+        bmarkPlotTimeStats = zeros(3,1);; %Array of [mean std n]
+        bmarkPostProcessTimeStats = zeros(3,1);; %Array of [mean std n]
+    end
+    
+    properties (Hidden, SetAccess=immutable)
+        sglIPAddress; %IP Address for remote control connection to SpikeGLX
+    end
+    
+    properties (SetAccess=protected,Hidden,SetObservable,AbortSet)
+        maxNumSpikesApplied = false; %Logical indicating if the refreshPeriodMaxNumSpikes clamp was applied for any channel on the last refresh period
+        
+    end
+    
+    properties (Hidden, Dependent)
+        spikeScanWindow; %spikeTimeWindow in 'scan' units, which correspond to A/D 'scans' (a sample for each channel). Note that the window includes this # of pre & post scan, PLUS one additional scan for the spike itself
+        
+        thresholdRMSScanRefreshPeriod; %thresholdRMSRefreshPeriod in scan units
+        
+        maxBufSizeScans; %Maximum number of scans to process during a refresh period
+        refreshPeriodAvgScans; %Average number of scans to process at each refresh period
+        
+        displayModeAxes; %Returns either hPlots/hRaster, depending on displayMode value
+        
+        stimEventTypes_; %Returns {'allstim'} in case that stimEventTypes is empty
+        
+        gridFigPosition; %Figure position of raster/waveform grid figures (same position for both..only one shown at a time)
+        psthFigPosition; %Figure position of PSTH grid figure
+    end
+    
+    %Constants
+    properties (Hidden,Constant)
+        PLOTS_PER_TAB = 32;
+        MAX_NUM_TABS = 4;
+        
+        INIT_RMS_THRESHOLD = 10; %Initial rmsMultiple to use when detecting spikes to exclude from initial RMS value determination
+        RASTER_DISP_STIM_RANGE_INCREMENT_FRACTION = 0.85; %fraction of stimNumDisplayRangeInfIncrement which must be reached before display range is auto-incremented.
+        
+        SGL_BITS_PER_SAMPLE = 16; %A constant from SpikeGLX currently; should perhaps update SpikeGL to pull this from the DAQmx API
+    end
+    
+    %% CONSTRUCTOR/DESTRUCTOR
+    methods
+        
+        function obj = SpikeGrid(sglIPAddress)
+            
+            %Process inputs
+            obj.sglIPAddress = sglIPAddress;
+            sgl = SpikeGL(sglIPAddress);
+            obj.sglParamCache = GetParams(sgl); %initialize SpikeGL param cache
+            Close(sgl);
+            
+            
+            %Create class-data file
+            s.lastConfigFileName = '';
+            obj.ensureClassDataFile(s,mfilename('class'));
+            
+            %Initialize resources
+            obj.ziniCreateGrids(); %Create spike waveform grid figure
+            
+            obj.hTimer = timer('Name','Spoke Waveform Grid Timer','ExecutionMode','fixedRate','TimerFcn',@obj.zcbkTimerFcn,'BusyMode','queue','StartDelay',0.1);
+            obj.hPSTHTimer = timer('Name','Spoke Plot PSTH Timer','ExecutionMode','fixedRate','TimerFcn',@(src,evnt)obj.plotPSTH,'BusyMode','drop','StartDelay',0.1);
+            
+            %Programmatic prop intializations
+            aiRangeMax = obj.sglParamCache.niAiRangeMax;
+            
+            obj.voltageScaleFactor = aiRangeMax / 2^(obj.SGL_BITS_PER_SAMPLE - 1);
+            
+            numPadChans = obj.numChans - obj.numAuxChans;
+            obj.hThresholdLines = repmat({ones(numPadChans,1) * -1},2,1);
+            obj.hSpikeLines = cell(numPadChans,1);
+            
+            obj.spikeAmpWindow = [-aiRangeMax aiRangeMax];
+            obj.tabDisplayed = 1;
+            obj.refreshRate = obj.refreshRate; %apply default value
+            
+            obj.zprvResetSpikeData();
+        end
+        
+        function initialize(obj)
+            initialize@most.Model(obj);
+            
+            if ~isempty(obj.getClassDataVar('lastConfigFileName'))
+                obj.loadConfig();
+            end
+        end
+        
+        function delete(obj)
+            
+            delete(obj.hFigs); %Why doesn't this happen automatically?
+        end
+        
+    end
+    
+    methods (Hidden)
+        %Helper methods
+        
+        function ziniCreateGrids(obj)
+            numChans = obj.numChans;
+            numPadChans = numChans - obj.numAuxChans;
+            
+            obj.numActiveTabs = ceil(numPadChans/obj.PLOTS_PER_TAB);
+            assert(obj.numActiveTabs <= obj.MAX_NUM_TABS,'Exceeded maximum number of tabs (%d)',obj.MAX_NUM_TABS); %TODO: Deal more gracefully
+            
+            %This is a good idea...but let's keep it simple for now
+            %       if obj.numActiveTabs > 1
+            %         numPlots = obj.PLOTS_PER_TAB;
+            %       else
+            %         numPlots = numPadChans;
+            %       end
+            numPlots = obj.PLOTS_PER_TAB;
+            
+            gridDimension = ceil(sqrt(numPlots));
+            gridPanelSize = 1/gridDimension;
+            
+            %Create waveform & raster grids
+            obj.hFigs.waveform = most.idioms.figureScaled(1.6,'Name','Spoke Waveform Grid');
+            obj.hFigs.raster = most.idioms.figureScaled(1.6,'Name','Spoke Raster Grid');
+            obj.hFigs.psth = most.idioms.figureScaled(1.6,'Name','Spoke PSTH Grid','Visible','off','CloseRequestFcn',@(src,evnt)set(src,'Visible','off'));
+            structfun(@(hFig)set(hFig,'NumberTitle','off','Menubar','none','Toolbar','none'),obj.hFigs);
+            
+            set([obj.hFigs.waveform obj.hFigs.raster obj.hFigs.psth],'Units','normalized');            
+            
+            %TODO: Use gobjects
+            for i=1:numPlots
+                
+                %Place panel from top-left, counting right and then down
+                rowCount = ceil(i/gridDimension);
+                colCount = mod(i-1,gridDimension) + 1;
+                panelPosn = [(colCount-1)*gridPanelSize  (gridDimension-rowCount)*gridPanelSize gridPanelSize gridPanelSize];
+                
+                obj.hPanels.waveform(i) = uipanel(obj.hFigs.waveform,'Position',panelPosn);
+                obj.hPanels.raster(i) = uipanel(obj.hFigs.raster,'Position',panelPosn);
+                obj.hPanels.psth(i) = uipanel(obj.hFigs.psth,'Position',panelPosn);
+                
+                %Places axes in panel and configure
+                obj.hPlots(i) = axes('Parent',obj.hPanels.waveform(i),'Position',[0 0 1 1],'XLim',obj.spikeTimeWindow); %,'YLim',obj.spikeAmpWindow);
+                obj.hRasters(i) = axes('Parent',obj.hPanels.raster(i),'Position',[0 0 1 1],'XLim',obj.stimTimeWindow);
+                obj.hPSTHs(i) = axes('Parent',obj.hPanels.psth(i),'Position',[0 0 1 1]);
+                
+                %TODO: Remove this function & just set here
+                obj.zprvSetAxesProps(obj.hPlots(i)); 
+                obj.zprvSetAxesProps(obj.hRasters(i));
+                obj.zprvSetAxesProps(obj.hPSTHs(i));
+                
+            end
+            
+            obj.hChanLabels = struct('waveform',[],'raster',[],'psth',[]);
+            
+        end
+    end
+    
+    %% PROPERTY ACCESS
+    methods
+        
+        function set.dataReadMode(obj,val)
+            obj.zprpAssertNotRunning('dataReadMode');
+            obj.validatePropArg('dataReadMode',val);
+            obj.dataReadMode = val;
+        end
+        
+        function set.displayMode(obj,val)
+            obj.zprpAssertNotRunning('displayMode');
+            obj.validatePropArg('displayMode',val);
+            
+            %Impose requirements before allowing switch to 'raster' mode
+            disallowRaster = false;
+            if strcmpi(val,'raster')
+                if isempty(obj.stimStartChannel)
+                    fprintf(2,'WARNING: Must specify stimStartChannel in order to use spike raster display mode\n');
+                    disallowRaster = true;
+                end
+                
+                if ~isempty(obj.stimEventTypes) && isempty(obj.stimEventTypeDisplayed)
+                    fprintf(2,'WARNING: A valid stimEventTypeDisplayed value must be specified in order to use spike raster display mode\n');
+                    disallowRaster = true;
+                end
+                
+                if disallowRaster
+                    val = 'waveform';
+                end
+                
+            end
+            
+            currPosn = obj.gridFigPosition;
+            set(obj.hFigs.(val),'Visible','on','Position',currPosn);
+            switch val
+                case 'waveform'
+                    set([obj.hFigs.raster obj.hFigs.psth],'Visible','off');
+                case 'raster'
+                    set(obj.hFigs.waveform,'Visible','off');
+            end
+            
+            obj.displayMode = val;
+            
+            %Side-effects
+            obj.zprvResetSpikeData();
+            obj.tabDisplayed = obj.tabDisplayed;
+            
+        end
+        
+        function set.filterWindow(obj,val)
+            obj.validatePropArg('filterWindow',val);
+            assert(val(2) > val(1),'Specified filter window must contain 2 elements in ascending order, specifying lower and upper frequency bound');
+            
+            obj.filterWindow = val;
+            
+            %Side-effects
+            if isequal(val(:),[0;inf])
+                obj.filterCoefficients = {};
+            else
+                if val(1) == 0
+                    [b,a] = butter(1,obj.filterWindow(2) * 2 / obj.sglParamCache.niSampRate,'low');
+                elseif isinf(val(2)) %high-pass filter
+                    [b,a] = butter(1,obj.filterWindow(1) * 2 / obj.sglParamCache.niSampRate,'high');
+                else
+                    [b,a] = butter(1,obj.filterWindow * 2 / obj.sglParamCache.niSampRate,'bandpass');
+                end
+                
+                obj.filterCoefficients = {a b};
+            end
+            
+        end
+        
+        function set.gatingChannel(obj,val)
+            obj.zprpAssertNotRunning('gatingChannel');
+            obj.validatePropArg('gatingChannel',val);
+            obj.zprpAssertAuxChan(val,'gatingChannel'); %Assert any gating channel specified is a valid auxiliary channel
+            obj.gatingChannel = val;
+        end
+        
+        function set.gatingThreshold(obj,val)
+            obj.validatePropArg('gatingThreshold',val);
+            obj.gatingThreshold = val;
+        end
+        
+        function set.gatingDuration(obj,val)
+            obj.validatePropArg('gatingDuration',val);
+            obj.gatingDuration = val;
+        end
+        
+        function set.globalMeanSubtraction(obj,val)
+            obj.validatePropArg('globalMeanSubtraction',val);
+            obj.globalMeanSubtraction = val;
+        end
+        
+        function val = get.displayModeAxes(obj)
+            switch obj.displayMode
+                case 'raster'
+                    val = obj.hRasters;
+                case 'waveform'
+                    val = obj.hPlots;
+            end
+        end
+        
+        function val = get.gridFigPosition(obj)
+            val = get(obj.hFigs.(obj.displayMode),'Position');
+        end
+        
+        function set.gridFigPosition(obj,val)
+            set(obj.hFigs.(obj.displayMode),'Position',val);
+        end
+        
+        function val = get.maxBufSizeScans(obj)
+            val = round(obj.maxBufSizeSeconds * obj.sglParamCache.niSampRate);
+        end
+        
+        function val = get.numChans(obj)
+            %val = obj.hSpoke.n_chan;
+            neuralChans = str2num(obj.sglParamCache.niMNChans1);             %#ok<ST2NM>
+            muxAnalogChans = str2num(obj.sglParamCache.niMAChans1);     %#ok<ST2NM>
+            
+            val = obj.sglParamCache.niMuxFactor * (numel(neuralChans) + numel(muxAnalogChans)) + obj.numAuxChans;
+        end
+        
+        function val = get.numAuxChans(obj)
+            auxAnalogChans = str2num(obj.sglParamCache.niXAChans1); %#ok<ST2NM>
+            auxDigitalChans = str2num(obj.sglParamCache.niXDChans1); %#ok<ST2NM>
+            
+            val = numel(auxAnalogChans) + numel(auxDigitalChans);
+        end
+        
+        %         function set.numAuxChans(obj,val)
+        %             obj.hSpoke.set_n_chan_aux(val);
+        %         end
+        
+        function val = get.psthFigPosition(obj)
+            val = get(obj.hFigs.psth,'Position');
+        end
+        
+        function set.psthFigPosition(obj,val)
+            set(obj.hFigs.psth,'Position',val);
+        end
+        
+        function set.psthTimeBin(obj,val)
+            obj.validatePropArg('psthTimeBin',val);
+            obj.psthTimeBin = val;
+        end
+        
+        function set.psthTimerPeriod(obj,val)
+            obj.validatePropArg('psthTimerPeriod',val);
+            
+            changeWhileRunning = strcmpi(get(obj.hPSTHTimer,'Running'),'on');
+            
+            if changeWhileRunning
+                stop(obj.hPSTHTimer);
+            end
+            
+            if ~isinf(val)
+                set(obj.hPSTHTimer,'Period',val,'StartDelay',val);
+                
+                if changeWhileRunning
+                    start(obj.hPSTHTimer);
+                end
+            end
+            
+            obj.psthTimerPeriod = val;
+        end
+        
+        function set.psthAmpRange(obj,val)
+            obj.validatePropArg('psthAmpRange',val);
+            
+            set(obj.hPSTHs,'YLim',val);
+            obj.psthAmpRange = get(obj.hPSTHs(1),'YLim');
+        end
+        
+        function val = get.numTabs(obj)
+            numPadChans = obj.numChans - obj.numAuxChans;
+            val = ceil(numPadChans/obj.PLOTS_PER_TAB);
+        end
+        
+        function val = get.refreshPeriodMaxSpikeRate(obj)
+            val = obj.refreshPeriodMaxNumSpikes * obj.refreshRate;
+        end
+        
+        function set.refreshPeriodMaxSpikeRate(obj,val)
+            obj.validatePropArg('refreshPeriodMaxSpikeRate',val);
+            
+            obj.refreshPeriodMaxNumSpikes = ceil(val / obj.refreshRate);
+        end
+        
+        function val = get.refreshPeriodAvgScans(obj)
+            val = round(get(obj.hTimer,'Period') * obj.sglParamCache.niSampRate);
+        end
+        
+        function set.refreshRate(obj,val)
+            obj.zprpAssertNotRunning('refreshRate');
+            obj.validatePropArg('refreshRate',val);
+            
+            refreshPeriodRounded = round(1e3 * 1/val) * 1e-3; %Make an integer number of milliseconds
+            set(obj.hTimer,'Period',refreshPeriodRounded);
+            
+            currMaxSpikeRate = obj.refreshPeriodMaxSpikeRate;
+            
+            obj.refreshRate = 1/get(obj.hTimer,'Period');
+            
+            %Side-effects
+            obj.refreshPeriodMaxSpikeRate = currMaxSpikeRate;
+        end
+        
+        function val = get.spikeScanWindow(obj)
+            val = round(obj.spikeTimeWindow * obj.sglParamCache.niSampRate);
+        end
+        
+        function val = get.stimEventTypes_(obj)
+            if isempty(obj.stimEventTypes)
+                val = {'allstim'};
+            else
+                val = obj.stimEventTypes;
+            end
+        end
+        
+        function val = get.stimEventClassifyChannel(obj)
+            if isempty(obj.stimEventClassifyChannel)
+                val = obj.stimStartChannel;
+            else
+                val = obj.stimEventClassifyChannel;
+            end
+        end
+        
+        function val = get.stimEventCount(obj)
+            if isempty(obj.stimEventCount_) %Acq hasn't yet been started
+                for i=1:length(obj.stimEventTypes_)
+                    obj.stimEventCount_.(obj.stimEventTypes_{i}) = 0;
+                end
+            end
+            
+            if isempty(obj.stimEventTypes)
+                val = obj.stimEventCount_.allstim;
+            else
+                val = sum(cellfun(@(eventType)obj.stimEventCount_.(eventType),obj.stimEventTypeDisplayed));
+            end
+        end
+        
+        function set.spikeAmpUnits(obj,val)
+            obj.validatePropArg('spikeAmpUnits',val);
+            
+            if strcmpi(obj.thresholdType,'volts')
+                val = 'volts'; %Value of 'rmsMultiple' only possible if thresholdType='rmsMultiple'
+            end
+            
+            oldVal = obj.spikeAmpUnits;
+            obj.spikeAmpUnits = val;
+            
+            %Side-effects
+            if ~strcmpi(oldVal,val)
+                %Adjust thresholdVal & spikeAmpWindow
+                
+                %TODO(?): A smarter adjustment based on the last-cached RMS values, somehow handlign the variety across channels
+                switch val
+                    case 'volts'
+                        obj.spikeAmpWindow = [-1 1] * obj.sglParamCache.niAiRangeMax;
+                    case 'rmsMultiple'
+                        obj.spikeAmpWindow = [-2 10] * obj.thresholdVal;
+                end
+                
+                %Refresh threshold lines
+                obj.zprvDrawThresholdLines();
+            end
+        end
+        
+        
+        function val = get.spikeAmpWindow(obj)
+            val = get(obj.hPlots(1),'YLim');
+        end
+        
+        function set.spikeAmpWindow(obj,val)
+            obj.validatePropArg('spikeAmpWindow',val);
+            
+            if strcmpi(obj.spikeAmpUnits,'volts');
+                aiRangeMax = obj.sglParamCache.niAiRangeMax;
+                if any(abs(val) > 1.1 * aiRangeMax)
+                    warning('Specified range exceeded input channel voltage range by greater than 10% -- spike amplitude axis limits clamped');
+                    val = min(val,1.1 * aiRangeMax);
+                    val = max(val,-1.1 * aiRangeMax);
+                end
+            end
+            
+            set(obj.hPlots,'YLim',val);
+            
+        end
+        
+        function set.spikeTimeWindow(obj,val)
+            obj.zprpAssertNotRunning('spikeTimeWindow');
+            obj.validatePropArg('spikeTimeWindow',val);
+            
+            set(obj.hPlots,'XLim',val);
+            obj.spikeTimeWindow = val;
+        end
+        
+        function set.spikesPerPlot(obj,val)
+            obj.validatePropArg('spikesPerPlot',val);
+            obj.spikesPerPlot = val;
+        end
+        
+        function set.spikesPerPlotClearMode(obj,val)
+            obj.zprpAssertNotRunning('spikesPerPlotClearMode');
+            obj.validatePropArg('spikesPerPlotClearMode',val);
+            
+            obj.spikesPerPlotClearMode = val;
+            
+            %side-effects
+            obj.zprvClearPlots('waveform');            
+        end
+        
+        function val = get.spikeRefractoryPeriod(obj)
+            switch obj.displayMode
+                case 'waveform'
+                    val = obj.spikeTimeWindow(2);
+                case 'raster'
+                    val = obj.spikeRefractoryPeriod;
+            end
+        end
+        
+        function set.spikeRefractoryPeriod(obj,val)
+            obj.validatePropArg('spikeRefractoryPeriod',val);
+            
+            oldVal = obj.spikeRefractoryPeriod;
+            switch obj.displayMode
+                case 'waveform'
+                    if obj.mdlInitialized && ~isequal(oldVal,val)
+                        fprintf(2,'WARNING: When displayMode = ''waveform'', the ''spikeRefractoryPeriod'' cannot be directly set. Value specified ignored.\n')
+                    end
+                case 'raster'
+                    obj.spikeRefractoryPeriod = val;
+            end
+        end
+        
+        %     function val = get.stimEventTypes(obj)
+        %       if isempty(obj.stimEventClassifyFcn)
+        %         val = '';
+        %       else
+        %         val = feval(obj.stimEventClassifyFcn);
+        %       end
+        %     end
+        
+        function set.stimEventTypeDisplayed(obj,val)
+            assert(ischar(val) || iscellstr(val),'Value of ''stimEventTypeDisplayed'' must be either a string or string cell array');
+            
+            if isempty(obj.stimEventTypes)
+                assert(isempty(val),'Value of ''stimEventTypeDisplayed'' must be empty when ''stimEventTypes'' is empty');
+                return;
+            else
+                assert(~isempty(val),'Valid value of ''stimEventTypeDisplayed'' must be supplied.');
+            end
+            
+            if ~iscell(val)
+                val = {val};
+            end
+            
+            assert(all(ismember(val,obj.stimEventTypes)),'One or more of the specified stim event types not recognized');
+            
+            oldVal = obj.stimEventTypeDisplayed;
+            obj.stimEventTypeDisplayed = val;
+            
+            %Side-effects
+            if ~isequal(oldVal,val) && strcmpi(obj.displayMode,'raster')
+                obj.zprvClearPlots('raster');
+                if obj.running
+                    obj.zprvRefreshRasterGrid();
+                end
+            end
+            
+        end
+        
+        function set.stimEventClassifyFcn(obj,val)
+            obj.zprpAssertNotRunning('stimEventClassifyFcn');
+            
+            %Custom validation
+            isFcn = isscalar(val) && isa(val,'function_handle');
+            assert(isempty(val) || isFcn, 'Property ''stimEventClassifyFcn'' must be a function handle (or empty)');
+            
+            errorString = '';
+            if isFcn
+                try
+                    s = feval(val);
+                    obj.stimEventTypes = s.stimEventTypes;
+                    obj.stimEventClassifyNumScans = s.stimEventClassifyNumScans;
+                    
+                    if isfield(s,'stimEventClassifyChannel')
+                        obj.stimEventClassifyChannel = s.stimEventClassifyChannel;
+                    else
+                        obj.stimEventClassifyChannel = [];
+                    end
+                    
+                    if isempty(obj.stimEventTypes)
+                        obj.stimEventTypeDisplayed = '';
+                    elseif isempty(obj.stimEventTypeDisplayed) || ~all(ismember(obj.stimEventTypeDisplayed,obj.stimEventTypes))
+                        obj.stimEventTypeDisplayed = obj.stimEventTypes{1};
+                    end
+                    
+                    obj.stimEventCount_ = struct();
+                    for i=1:length(obj.stimEventTypes)
+                        obj.stimEventCount_.(obj.stimEventTypes{i}) = 0;
+                    end
+                    
+                catch ME
+                    errorString = 'Specified ''stimEventClassifyFcn'' must return structure with fields ''stimEventTypes'' and ''stimEventClassifyNumScans'' when called with no arguments.';
+                end
+            end
+            
+            if ~isFcn || ~isempty(errorString)
+                val = [];
+                obj.stimEventTypes = '';
+                obj.stimEventClassifyNumScans = 0;
+                
+                obj.stimEventCount_ = struct();
+                obj.stimEventCount_.allstim = 0;
+            end
+            
+            if errorString
+                error(errorString);
+            else
+                obj.stimEventClassifyFcn = val;
+            end
+        end
+        
+        function set.stimNumDisplayRange(obj,val)
+            obj.validatePropArg('stimNumDisplayRange',val);
+            
+            ylim = obj.zprvStimNumDisplayRange2YLim(val);
+            
+            set(obj.hRasters,'YLim',ylim);
+            obj.stimNumDisplayRange = val;
+        end
+        
+        function set.stimNumDisplayRangeInfIncrement(obj,val)
+            obj.validatePropArg('stimNumDisplayRangeInfIncrement',val);
+            obj.stimNumDisplayRangeInfIncrement = val;
+        end
+        
+        function set.stimStartChannel(obj,val)
+            obj.zprpAssertNotRunning('stimStartChannel');
+            obj.validatePropArg('stimStartChannel',val);
+            obj.zprpAssertAuxChan(val,'stimStartChannel'); %Assert any stimulus channel specified is a valid auxiliary channel
+            obj.stimStartChannel = val;
+        end
+        
+        function set.stimStartThreshold(obj,val)
+            obj.validatePropArg('stimStartThreshold',val);
+            obj.stimStartThreshold = val;
+        end
+        
+        function set.stimTimeWindow(obj,val)
+            obj.zprpAssertNotRunning('stimTimeWindow');
+            obj.validatePropArg('stimTimeWindow',val);
+            
+            obj.zprvClearPlots('raster');
+            set(obj.hRasters,'XLim',val);
+            
+            obj.zprvClearPlots('psth');
+            
+            obj.stimTimeWindow = val;
+        end
+        
+        
+        function set.tabDisplayed(obj,val)
+            obj.validatePropArg('tabDisplayed',val);
+            assert(val <= obj.numTabs,'Value specified (%d) exceeds the number of available tabs (%d)',val,obj.numTabs);
+            
+            obj.blockTimer = true;
+            
+            try
+                obj.tabDisplayed = val;
+                dispType = obj.displayMode;
+                
+                %Update tabChanNumbers
+                numPadChans = obj.numChans -  obj.numAuxChans;
+                
+                tcn = (1:obj.PLOTS_PER_TAB) + (val-1)*obj.PLOTS_PER_TAB;
+                tcn(tcn > numPadChans) = [];
+                obj.tabChanNumbers = tcn; %One-based channel index
+                
+                %Clear grid waveform/raster plots
+                obj.zprvClearPlots({obj.displayMode 'psth'},false); %Don't reuse existing threshold lines
+                
+                %Update plot channel labels
+                most.idioms.deleteHandle(obj.hChanLabels.(dispType));
+                most.idioms.deleteHandle(obj.hChanLabels.psth);
+                
+                hAxes = obj.displayModeAxes;
+                for i=1:length(tcn)
+                    %Display with 0-based channel index
+                    obj.hChanLabels.(dispType)(i) = text('Parent',hAxes(i),'String',num2str(tcn(i) - 1),'HandleVisibility','off','FontWeight','bold','Color','k','Units','normalized','Position',[.08 .92],'HorizontalAlignment','center');
+                    obj.hChanLabels.psth(i) = text('Parent',obj.hPSTHs(i),'String',num2str(tcn(i) - 1),'HandleVisibility','off','FontWeight','bold','Color','k','Units','normalized','Position',[.08 .92],'HorizontalAlignment','center');
+                end
+                
+                %Update threshold lines/raster plots, as appropriate
+                if strcmpi(obj.displayMode,'raster')
+                    obj.zprvRefreshRasterGrid();
+                end
+                
+                drawnow expose update;
+                
+                obj.blockTimer = false;
+                
+            catch ME
+                obj.blockTimer = false;
+                ME.rethrow();
+            end
+        end
+        
+        function set.thresholdAbsolute(obj,val)
+            obj.validatePropArg('thresholdAbsolute',val);
+            obj.thresholdAbsolute = val;
+            
+            %Side-effects
+            obj.zprvDrawThresholdLines();
+        end
+        
+        function val = get.thresholdRMSScanRefreshPeriod(obj)
+            val = round(obj.thresholdRMSRefreshPeriod * obj.sglParamCache.niSampRate);
+        end
+        
+        function set.thresholdType(obj,val)
+            obj.zprpAssertNotRunning('thresholdType');
+            obj.validatePropArg('thresholdType',val);
+            
+            oldVal = obj.thresholdType;
+            obj.thresholdType = val;
+            
+            %Side Effects
+            if ~strcmpi(oldVal,val)
+                
+                %Adjust thresholdVal & spikeAmpWindow
+                
+                %TODO(?): A smarter adjustment based on the last-cached RMS values, somehow handlign the variety across channels
+                switch val
+                    case 'volts'
+                        aiRangeMax = obj.sglParamCache.niAiRangeMax;
+                        obj.thresholdVal = .1 * aiRangeMax;
+                        obj.spikeAmpWindow = [-1 1] * aiRangeMax;
+                    case 'rmsMultiple'
+                        obj.thresholdVal = 5;
+                        obj.spikeAmpWindow = [-2*obj.thresholdVal 10*obj.thresholdVal];
+                end
+                
+                %Redraw threshold lines
+                obj.zprvDrawThresholdLines();
+            end
+        end
+        
+        function set.thresholdVal(obj,val)
+            %obj.zprpAssertNotRunning('thresholdVal');
+            obj.validatePropArg('thresholdVal',val);
+            
+            obj.thresholdVal = val;
+            
+            %Side-effects
+            obj.zprvDrawThresholdLines();
+        end
+        
+        function set.thresholdRMSRefreshPeriod(obj,val)
+            obj.zprpAssertNotRunning('thresholdRMSRefreshPeriod');
+            obj.validatePropArg('thresholdRMSRefreshPeriod',val);
+            
+            obj.thresholdRMSRefreshPeriod = val;
+        end
+        
+    end
+    
+    
+    %Property-access helper functions
+    methods (Access=protected)
+        
+        function zprpAssertNotRunning(obj,propName)
+            assert(~obj.running,'Property ''%s'' cannot be set while grid waveform display is running',propName);
+        end
+        
+        function zprpAssertAuxChan(obj,chanNum,propName)
+            assert(isempty(chanNum) || (chanNum <= (obj.numChans-1) && chanNum >= (obj.numChans - obj.numAuxChans)),'The property ''%s'' must specify one of the %d auxiliary channels',propName,obj.numAuxChans);
+        end
+        
+        
+    end
+    
+    
+    
+    
+    %% PUBLIC METHODS
+    methods
+        function start(obj)
+            
+            if obj.running
+                return;
+            end
+            
+            
+            %             %Update filename on all start() calls -- handles 1) SpikeGL restart and 2)start & retrigger mode cases
+            %             obj.hSpoke.updateFileName();
+            
+            %Open SpikeGL connection & updateparameter cache
+            obj.hSGL = SpikeGL(obj.sglIPAddress);
+            obj.sglParamCache = GetParams(obj.hSGL);                           
+            
+            %Initializations
+            obj.maxReadableScanNum = 0;
+            obj.lastMaxReadableScanNum = 0;
+            obj.priorfileMaxReadableScanNum = 0;
+            
+            hTimers = obj.hTimer;
+            numChans = obj.numChans;
+            numPadChans = numChans -  obj.numAuxChans;
+            obj.totalBytesPerScan =numChans * (obj.SGL_BITS_PER_SAMPLE / 8);
+            
+            %Select channel subset for speed  
+            subset = GetChannelSubset(obj.hSGL);
+            if isinf(obj.channelSubset)
+                obj.sglChanSubset  = subset(1:numChans);
+            else
+                obj.sglChanSubset  = subset(obj.channelSubset);
+            end
+            
+            %Reset various state vars -- RMS/mean, filterCondition, spike data, etc
+            obj.zprvResetAcquisition();
+            
+            %Clear previous lines
+            handlesToClear = [];
+            
+            switch obj.displayMode
+                case 'waveform'
+                    obj.zprvClearPlots('waveform');
+                    %                     for i=1:numPadChans
+                    %                         handlesToClear = [handlesToClear; obj.hSpikeLines{i}(isgraphics(obj.hSpikeLines{i}))'];
+                    %                     end
+                    %                     %VI051012: Seems like we should probably clear out obj.hSpikeLines here too
+                    %                     %set(handlesToClear,'EraseMode','normal');
+                    %                     delete(handlesToClear);
+                    
+                case 'raster'
+                    obj.zprvClearPlots({'raster' 'psth'});
+            end
+            
+            
+            %Display-type specific initialization
+            switch obj.displayMode
+                case 'waveform'
+                    
+                    %Draw new threshold lines, if applicable
+                    obj.zprvDrawThresholdLines();
+                    
+                case 'raster'
+                    
+                    obj.stimTotalCount = 0;
+                    for i=1:length(obj.stimEventTypes_)
+                        obj.stimEventCount_.(obj.stimEventTypes_{i}) = 0;
+                    end
+                    
+                    [obj.stimScanNums, obj.stimWindowStartScanNums, obj.stimWindowEndScanNums] = deal([]);
+                    obj.stimEventTypeNames = {};
+                    
+                    %Initialize spikeData stimEventTypeStruct
+                    
+                    if isempty(obj.stimEventTypes)
+                        fnames = {'allstim'};
+                    else
+                        fnames = obj.stimEventTypes;
+                    end
+                    
+                    for i=1:numPadChans
+                        for j=1:length(fnames)
+                            obj.spikeData{i}.stimEventTypeStruct.(fnames{j}) = [];
+                        end
+                    end
+                    
+                    obj.zprvResetStimNumsPlotted();
+                    
+                    if ~isinf(obj.psthTimerPeriod)
+                        hTimers(end+1) = obj.hPSTHTimer;
+                    end
+                    
+            end
+            
+            %Apply graphics updates
+            drawnow expose update;
+            
+            %Reset stats
+            obj.bmarkReadTimeStats = zeros(3,1);
+            obj.bmarkPreProcessTimeStats = zeros(3,1);
+            obj.bmarkPlotTimeStats = zeros(3,1);
+            obj.bmarkPostProcessTimeStats = zeros(3,1);
+            
+            %Start timer(s)
+            start(hTimers);
+            
+            obj.running = true;
+            
+            disp('started');
+            
+        end
+        
+        function stop(obj)
+            if ~obj.running
+                return;
+            end
+            
+            stop([obj.hTimer obj.hPSTHTimer]);
+            if ~isempty(obj.hSGL)
+                ME = [];
+                try
+                    Close(obj.hSGL);
+                catch MEtemp
+                    ME = MEtemp;
+                end
+                
+                obj.hSGL = [];
+                
+                if ~isempty(ME)
+                    ME.rethrow();
+                end
+                
+            end
+            
+            obj.running = false;
+            
+            %Reset to initial conditions
+            obj.maxNumSpikesApplied = false;
+        end
+        
+        function loadConfig(obj,filename)
+            
+            if nargin < 2
+                if isempty(obj.configFileName)
+                    startName = obj.getClassDataVar('lastConfigFileName');
+                else
+                    startName = obj.configFileName;
+                end
+                [f,p] = uigetfile('*.cfg','Load Spoke configuration file',startName);
+                if isnumeric(f)
+                    return;
+                end
+                filename = fullfile(p,f);
+            else
+                errorMessage = 'Argument ''filename'' supplied was not a valid string or did not specify an existing configuration (CFG) file';
+                assert(most.idioms.isstring(filename),errorMessage);
+                assert(exist(filename,'file'),errorMessage)
+                [~,~,e] = fileparts(filename);
+                assert(strcmpi(e,'.cfg'),errorMessage);
+            end
+            
+            obj.mdlLoadConfig(filename);
+            
+            if ~isempty(obj.hController)
+                assert(isscalar(obj.hController));
+                obj.hController{1}.ctlrLoadGUILayout(filename);
+            end
+            
+            %Cache name of last-saved/loaded config filename
+            obj.configFileName = filename;
+            obj.setClassDataVar('lastConfigFileName',obj.configFileName);
+            
+        end
+        
+        function saveConfigAs(obj,filename)
+            
+            if nargin < 2
+                if isempty(obj.configFileName)
+                    startName = obj.getClassDataVar('lastConfigFileName');
+                else
+                    startName = obj.configFileName;
+                end
+                [f,p] = uiputfile('*.cfg','Save Spoke configuration file',startName);
+                if isnumeric(f)
+                    return;
+                end
+                filename = fullfile(p,f);
+            else
+                errorMessage = 'Argument ''filename'' supplied was not a valid string or did not specify a valid configuration (CFG) file';
+                assert(most.idioms.isstring(filename),errorMessage);
+                [p,~,e] = fileparts(filename);
+                assert(exist(p,'dir'),errorMessage);
+                assert(strcmpi(e,'.cfg'),errorMessage);
+            end
+            
+            %Save model properties
+            obj.mdlSaveConfig(filename,'include',{'spikeAmpWindow' 'numAuxChans' 'gridFigPosition' 'psthFigPosition'});
+            
+            %Save controller fig layout
+            if ~isempty(obj.hController)
+                assert(isscalar(obj.hController));
+                obj.hController{1}.ctlrSaveGUILayout(filename);
+            end
+            
+            %Cache name of last-saved/loaded config filename
+            obj.configFileName = filename;
+            obj.setClassDataVar('lastConfigFileName',obj.configFileName);
+            
+        end
+        
+        function plotPSTH(obj)
+            assert(strcmpi(obj.displayMode,'raster'),'Plot PSTH operation only available when displayMode=''raster''');
+            
+            obj.blockTimer = true;
+            
+            ME = [];
+            
+            try
+                obj.zprvClearPlots('psth');
+                
+                set(obj.hFigs.psth,'Visible','on');
+                colorOrder = get(0,'DefaultAxesColorOrder');
+                
+                %VVV: use a hidden prop instead of this logic, here and elsewhere
+                if isempty(obj.stimEventTypes)
+                    eventTypes = {'allstim'};
+                else
+                    eventTypes = obj.stimEventTypeDisplayed;
+                end
+                
+                if length(eventTypes) < length(obj.stimEventTypes)
+                    [tf,colorIdxs] = ismember(eventTypes,obj.stimEventTypes);
+                    assert(all(tf));
+                else
+                    colorIdxs = 1:length(obj.stimEventTypes);
+                end
+                
+                scanPeriod = 1/ obj.sglParamCache.niSampRate;
+                scansToBin = max(1,round(obj.psthTimeBin/scanPeriod));
+                scanPeriodBinned = scanPeriod * scansToBin;
+                
+                histogramBins = floor(obj.stimTimeWindow(1)/scanPeriod):scansToBin:ceil(obj.stimTimeWindow(2)/scanPeriod);
+                
+                plotCount = 0;
+                for c=obj.tabChanNumbers
+                    plotCount = plotCount + 1;
+                    
+                    if isempty(obj.spikeData{c}.scanNums)
+                        continue;
+                    end
+                    
+                    for e=1:length(eventTypes)
+                        eventType = eventTypes{e};
+                        
+                        eventIdxs = obj.spikeData{c}.stimEventTypeStruct.(eventType);
+                        
+                        histData = hist(obj.spikeData{c}.stimRelScanNums(eventIdxs),histogramBins);
+                        histIdxs = (histData > 0);
+                        
+                        axes(obj.hPSTHs(plotCount));
+                        if ~isempty(histIdxs)
+                            line('XData',histogramBins(histIdxs),'YData',histData(histIdxs)/(obj.stimEventCount_.(eventType)*scanPeriodBinned),'LineStyle','-','Color',colorOrder(colorIdxs(e),:));
+                        end
+                        
+                    end
+                end
+                
+            catch ME_
+                ME = ME_;
+            end
+            
+            %Clean-up
+            obj.blockTimer = false;
+            
+            if ~isempty(ME)
+                ME.rethrow();
+            end
+        end
+        
+        
+        function sortRastergram(obj)
+            %Method to sort stimuli displayed in rastergram by stimulus event type
+            
+            assert(iscell(obj.stimEventTypeDisplayed) && length(obj.stimEventTypeDisplayed) > 1,'Only possible (or useful) to reorganize rastergram when stimEventTypeDisplayed specifies more than one stimulus event type');
+            
+            obj.blockTimer = true;
+            
+            ME = [];
+            
+            
+            try
+                obj.zprvClearPlots('raster');
+                obj.zprvRefreshRasterGrid();
+            catch ME_
+                ME = ME_;
+            end
+            
+            %Clean-up
+            obj.blockTimer = false;
+            
+            if ~isempty(ME)
+                ME.rethrow();
+            end
+            
+            
+        end
+        
+    end
+    
+    
+    
+    %% HIDDEN METHODS
+    methods (Hidden)
+        
+        function zcbkTimerFcn(obj,src,evnt)
+            if obj.blockTimer
+                return;
+            end
+            
+            try
+                
+                t0 = tic;
+                
+                cnt = GetScanCount(obj.hSGL);
+                
+                %Use current scan number as reference scan number on first timer entry following start/restart
+                if ismember(obj.bufScanNumEnd,[0 -1])
+                    %fprintf('bufScanNumEnd: %d\n',obj.bufScanNumEnd);
+                    obj.bufScanNumEnd = cnt;
+                    obj.lastMaxReadableScanNum = cnt;
+                    return;
+                else
+                    obj.maxReadableScanNum = cnt;
+                end
+                
+                numChans = obj.numChans;
+                numPadChans = numChans -  obj.numAuxChans;
+                rmsMultipleThresh = strcmpi(obj.thresholdType,'rmsMultiple');
+                rmsMultipleInitializing = rmsMultipleThresh && obj.thresholdRMSLastScan == 0;
+                rasterDisplayMode = strcmpi(obj.displayMode,'raster');
+                
+                sampRate = obj.sglParamCache.niSampRate;
+                sampPeriod = 1 / sampRate;
+                
+                
+                %                     %Handle case of filename change - including case of SpikeGL
+                %                     %logging stop/restart, which is detected as filename change (from
+                %                     %empty to prior filename)
+                %                 elseif changedFileName
+                %                     fprintf('fileMaxReadableScanNum: %d obj.lastMaxReadableScanNum: %d\n',fileMaxReadableScanNum, obj.lastMaxReadableScanNum );
+                %
+                %
+                %                     obj.lastMaxReadableScanNum = 0;
+                %                     obj.zprvResetAcquisition(true); %Reset spike data buffer, filter -- leave RMS/mean & spikeData intact
+                %
+                %                     %Recompute RMS if needed
+                %                     if rmsMultipleThresh && obj.thresholdRMSRefreshOnRetrigger
+                %                         obj.thresholdRMS = zeros(numPadChans,1);
+                %                         obj.thresholdMean = zeros(numPadChans,1);
+                %                         obj.thresholdRMSLastScan = 0;
+                %
+                %                         rmsMultipleInitializing = true;
+                %                     end
+                %
+                
+                %Handle case of no new data
+                if obj.maxReadableScanNum == obj.lastMaxReadableScanNum %no new data
+                    
+                    %Check if SpikeGL has stopped
+                    if ~IsRunning(obj.hSGL)
+                        obj.stop();
+                        return;
+                    else % Logging has been stopped...may resume anytime
+                        return;
+                    end
+                end
+                
+                %Previous approach to detecting SpikeGL stop/restart - now
+                %defunct. Superceded by changedFilename test.
+                if obj.maxReadableScanNum < obj.lastMaxReadableScanNum
+                    assert(false);
+                end
+                
+                scansToRead_ = obj.maxReadableScanNum - obj.lastMaxReadableScanNum;
+                
+                meanScansPerTimerTick = sampRate / obj.refreshRate; 
+                scansToRead = min(scansToRead_, round(2  * meanScansPerTimerTick));
+                if scansToRead < scansToRead_
+                   fprintf(2,'WARNING. A large number of queued-up samples to read detected: %d. If intermittent, this should not cause a problem.\n',scansToRead_ - scansToRead); 
+                end
+                    
+                
+                %                 if changedFileName
+                %                     obj.priorfileMaxReadableScanNum = obj.maxReadableScanNum;
+                %                 end
+                %
+                %                 obj.maxReadableScanNum = fileMaxReadableScanNum + obj.priorfileMaxReadableScanNum; %Maintain scan number /across/ file-rollover, not worrying about any gap
+                %
+                %                 if obj.maxReadableScanNum <= 0
+                %                     fprintf(2,'WARNING! maxReadableScanNum: %d\n',obj.maxReadableScanNum);
+                %                 end
+                
+                %
+                %
+                %         %Handle case of restarting acquisition
+                %         if obj.restartPending
+                %           obj.restartPending = false;
+                %
+                %           obj.hSpoke.updateFilename(); %Handle possible (likely) change in filename on stop & restart
+                %
+                %           obj.zprvResetAcquisition();
+                %           obj.zprvClearPlots();
+                %         end
+                %
+                
+                %Read newly available data
+                %[scansToRead, newData] = znstReadAvailableData(obj.maxReadableScanNum-obj.priorfileMaxReadableScanNum-scansToRead,scansToRead); %obj.bufScanNumEnd will be 0 in case of file-rollover or SpikeGL stop/restart
+                newData = GetDAQData(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglChanSubset);               
+                obj.lastMaxReadableScanNum = obj.lastMaxReadableScanNum + scansToRead;
+                t1 = toc(t0);
+              
+                %Apply global mean subtraction, if applicable
+                if obj.globalMeanSubtraction
+                    newData(:,1:numPadChans) = newData(:,1:numPadChans) - mean(mean(newData(:,1:numPadChans)));
+                end
+                t2 = toc(t0);
+                
+                
+                %Filter data if needed
+                if ~isempty(obj.filterCoefficients)
+                    [newData,obj.filterCondition] = filter(obj.filterCoefficients{2},obj.filterCoefficients{1},double(newData),obj.filterCondition); %Convert to double..but still in A/D count values, not voltages
+                end
+                
+                %Append data to spikeDataBuffer
+                bufStartScanNum = znstAugmentSpikeDataBuffer(scansToRead, newData);
+                t3 = toc(t0);
+                
+                %Detect spike(s) within data buffer, except for final spike-window 'post' time
+                if size(obj.spikeDataBuffer,1) < (obj.spikeScanWindow(2) + 2)
+                    return;
+                end
+                if rmsMultipleInitializing %Handle case where no RMS data has been computed yet
+                    %obj.spikeDataBuffer((obj.refreshPeriodAvgScans+1):end,:) = []; %VVV062812: Is this needed/wanted?
+                    
+                    znstUpdateRMSAndMean([],[]); %Compute rms/mean without spikes
+                    newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum); %Detect spikes using rmsMultiple=obj.INIT_RMS_THRESHOLD
+                    znstUpdateRMSAndMean(newSpikeScanNums,bufStartScanNum); %Recompute a rms value with, if anything, excess spike exclusion
+                    
+                    %newSpikeScanNums = cell(numPadChans,1); %Don't plot/store these spikes, though
+                    newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum);
+                else
+                    newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum);
+                end
+                t4 = toc(t0);
+                
+                %Store spike waveform data, abiding gate/stimulus signals as applicable
+                if isempty(newSpikeScanNums)
+                    %no-op
+                    
+                elseif isempty(obj.gatingChannel) || rasterDisplayMode %At moment, gating is not supported in combination with raster mode
+                    %Store all new spikes
+                    znstStoreNewSpikes(newSpikeScanNums,bufStartScanNum);
+                    
+                else %gating
+                    
+                    %Store only those new spikes that fall within a gating window
+                    spikeDataBufferStartIdx = 1;
+                    spikesToStore = cell(numPadChans,1);
+                    
+                    while any(cellfun(@(x)~isempty(x),newSpikeScanNums)) %Some detected spikes remain on at least one channel
+                        if ~isempty(obj.gatedScans) %A gating window has been previously computed
+                            
+                            spikeDataBufferStartIdx = obj.gatedScans(2) + 1; %Subsequent searches now begin after the gating window
+                            
+                            for i=1:numPadChans
+                                
+                                if isempty(newSpikeScanNums{i})
+                                    continue;
+                                end
+                                
+                                idxs = find(newSpikeScanNums{i} >= obj.gatedScans(1)  & newSpikeScanNums{i} <= obj.gatedScans(2)); %Find idxs into spikeScanNum arrays containing scan numbers within the gating window
+                                
+                                if isempty(idxs)
+                                    continue;
+                                end
+                                
+                                spikesToStore{i} = newSpikeScanNums{i}(idxs);
+                                
+                                newSpikeScanNums{i}(1:idxs(end)) = []; %Clear all detected spikes up through the last spike detected within gate for this channel
+                                
+                            end
+                            
+                            obj.gatedScans = []; %Done processing spikes with the last gate's scans
+                            
+                        elseif spikeDataBufferStartIdx > length(obj.spikeDataBuffer) % Have traversed the full spikeDataBuffer -- all the spikes flagged within a gate should already be stored
+                            break;
+                        else
+                            %Detect first threshold-crossing on gating channel for remainder of scan window
+                            crossIdx = spikeDataBufferStartIdx + find(diff(obj.spikeDataBuffer(spikeDataBufferStartIdx:end,obj.gatingChannel + 1) > obj.gatingThreshold) == 1, 1); %Should not have off-by-one error -- lowest possible value is spikeDataBufferStartIdx+1 (if the second sample crosses threshold)
+                            
+                            if isempty(crossIdx) %no threshold crosngs on gate channel detected
+                                break;
+                            else
+                                obj.gatedScans(1) = crossIdx + bufStartScanNum - 1; %Should not be off-by-one -- crossIdx indicates which element starting from bufStartScanNum has crossing. If it's second element (earliest posible), then gate starts at bufStartScanNum+1
+                                obj.gatedScans(2) = obj.gatedScans(1) + round(obj.gatingDuration / sampPeriod) - 1;
+                            end
+                            
+                        end
+                        
+                    end
+                    
+                    znstStoreNewSpikes(spikesToStore,bufStartScanNum);
+                end
+                t5 = toc(t0);
+                
+                %Detect, record, classify stimulus start, as needed
+                if rasterDisplayMode
+                    %oldStimScanNums = obj.stimScanNums;
+                    znstDetectStimulus(bufStartScanNum,changedFileName);
+                    %newStimScanNums = setdiff(obj.stimScanNums,oldStimScanNums);
+                    %assert(all(newStimScanNums > bufStartScanNum));
+                    
+                    if ~isempty(obj.stimScanNums)
+                        znstClassifyStimulus(bufStartScanNum); %Classify stimulus event type, if possible
+                    end
+                    
+                    chanNewSpikes = znstTagSpikes(); %Tag spike data with stimulus/event info, as needed/possible
+                end
+                t6 = toc(t0);
+                
+                %Plot newly detected spike(s) that were stored for display - will always be enough post data, and generally enough pre-data except for spikes at very beginning
+                if rasterDisplayMode
+                    obj.zprvRefreshRasterGrid(chanNewSpikes);
+                else
+                    obj.zprvPlotNewSpikes();
+                end
+                t7 = toc(t0);
+                
+                %Update current RMS and mean values, if needed
+                if (rmsMultipleThresh || obj.filterWindow(1) == 0) && ...
+                        (obj.bufScanNumEnd - obj.thresholdRMSLastScan) > obj.thresholdRMSScanRefreshPeriod % enough time has elapsed since last RMS sampling
+                    znstUpdateRMSAndMean(newSpikeScanNums,bufStartScanNum);
+                end
+                t8 = toc(t0);
+                
+                %Contract the data buffer --
+                try
+                    if rasterDisplayMode
+                        %Raster mode: leave all but the number of scans required to classify
+                        obj.spikeDataBuffer(1:end-max(1,obj.stimEventClassifyNumScans)+1,:) = [];
+                    else
+                        %Waveform mode: leave only one full spikeTimeWindow (pre+post+1 sample) at the end
+                        obj.spikeDataBuffer(1:end-(diff(obj.spikeScanWindow)+1),:) = [];
+                    end
+                catch ME
+                    fprintf(2,'Error contracting the data buffer, which has size: %s\n',mat2str(size(obj.spikeDataBuffer)));
+                    ME.rethrow();
+                end
+                t9 = toc(t0);
+                
+                %fprintf('Total Time (%d scans of %d channels): %g\tRead: %g\tMeanSubtract: %g\tFilter: %g\tDetect: %g\tStore: %g\tStimTag: %g\tPlot: %g \t Mean Compute: %g\tContraction: %g\n',scansToRead,size(newData,2),t8*1000,t1*1000,(t2-t1)*1000,(t3-t2)*1000,(t4-t3)*1000,(t5-t4)*1000,(t6-t5)*1000,(t7-t6)*1000,(t8-t7)*1000,(t9-t8)*1000);
+                readTime = 1000 * t1;
+                procTimePre = 1000 * (t6-t1);
+                plotTime = 1000 * (t7-t6);
+                procTimePost = 1000 * (t9-t7);                              
+                
+                n = obj.bmarkReadTimeStats(3); 
+                mu = (obj.bmarkReadTimeStats(1) * n + readTime) / (n+1);
+                std = sqrt((obj.bmarkReadTimeStats(2)^2 * n + (readTime - mu)^2)/ (n+1)); 
+                obj.bmarkReadTimeStats(1) = mu;
+                obj.bmarkReadTimeStats(2) = std;
+                obj.bmarkReadTimeStats(3) = obj.bmarkReadTimeStats(3) + 1;
+                                
+                n = obj.bmarkPreProcessTimeStats(3); 
+                mu = (obj.bmarkPreProcessTimeStats(1) * n + procTimePre) / (n+1);
+                std = sqrt((obj.bmarkPreProcessTimeStats(2)^2 * n + (procTimePre - mu)^2)/ (n+1)); 
+                obj.bmarkPreProcessTimeStats(1) = mu;
+                obj.bmarkPreProcessTimeStats(2) = std;
+                obj.bmarkPreProcessTimeStats(3) = obj.bmarkPreProcessTimeStats(3) + 1;
+                
+                n = obj.bmarkPlotTimeStats(3); 
+                mu = (obj.bmarkPlotTimeStats(1) * n + plotTime) / (n+1);
+                std = sqrt((obj.bmarkPlotTimeStats(2)^2 * n + (plotTime - mu)^2)/ (n+1)); 
+                obj.bmarkPlotTimeStats(1) = mu;
+                obj.bmarkPlotTimeStats(2) = std;
+                obj.bmarkPlotTimeStats(3) = obj.bmarkPlotTimeStats(3) + 1;
+                
+                n = obj.bmarkPostProcessTimeStats(3); 
+                mu = (obj.bmarkPostProcessTimeStats(1) * n + procTimePost) / (n+1);
+                std = sqrt((obj.bmarkPostProcessTimeStats(2)^2 * n + (procTimePost - mu)^2)/ (n+1)); 
+                obj.bmarkPostProcessTimeStats(1) = mu;
+                obj.bmarkPostProcessTimeStats(2) = std;
+                obj.bmarkPostProcessTimeStats(3) = obj.bmarkPostProcessTimeStats(3) + 1;
+                
+                fprintf('Total Time (%d scans/%d chans): %g -- Read: <%g, %g, %g> Plot: <%g, %g, %g> PreProc: <%g, %g, %g> PostProc: <%g, %g, %g> (Format: <last, mean, std>)\n', ...
+                    scansToRead,size(newData,2),1000*t9,...
+                    readTime,obj.bmarkReadTimeStats(1),obj.bmarkReadTimeStats(2),...
+                    plotTime,obj.bmarkPlotTimeStats(1),obj.bmarkPlotTimeStats(2),...
+                    procTimePre,obj.bmarkPreProcessTimeStats(1),obj.bmarkPreProcessTimeStats(2),...   
+                    procTimePost,obj.bmarkPostProcessTimeStats(1),obj.bmarkPostProcessTimeStats(2));
+            
+            catch ME %Handle Timer CB errors
+                most.idioms.reportError(ME);
+                ME.rethrow();
+            end
+            
+            
+            return;
+            
+            %             function [scansToRead, newData] = znstReadAvailableData(fileStartScan,scansToRead)
+            %                 %Read 'scansToRead' scans from file currently being logged to, beginning at the scan number 'fileStartScan'
+            %
+            %                 %Read all available new data, up to maximum amount
+            %                 assert(scansToRead >= 0);
+            %
+            %                 %         %Detect/handle if acquisition has been restarted
+            %                 %         if scansToRead < 0
+            %                 %           scansToRead = fileMaxReadableScanNum;
+            %                 %
+            %                 %           obj.zprvResetAcquisition();
+            %                 %         end
+            %
+            %
+            %                 %fprintf('TimerFcn entry. Size spikeDataBuffer: %s \t Max Readable Scan Num: %d \t new ScansToRead: %d\n',mat2str(size(obj.spikeDataBuffer)),fileMaxReadableScanNum,scansToRead);
+            %
+            %                 if scansToRead > obj.maxBufSizeScans %Overflow condition: too much data to read
+            %
+            %                     overage = scansToRead - obj.maxBufSizeScans;
+            %                     fprintf('Reducing scansToRead from %d to max allowable value (%d)\n',scansToRead,obj.maxBufSizeScans)
+            %                     scansToRead = obj.maxBufSizeScans;
+            %
+            %                     if obj.bufScanNumEnd ~= 0 % overflow occurred after the initial start() or zprvResetAcquisition() call
+            %                         warning('Too much unprocessed data has queued up..discarding all but most recent data. Some spikes may have been missed.');
+            %
+            %                         obj.spikeDataBuffer = zeros(0,numChans); %Clear carry-over from last timer function execution
+            %                     end
+            %
+            %                     %obj.bufScanNumEnd = obj.maxReadableScanNum - scansToRead; %Will only read last maxBufSizeScans
+            %
+            %                     fileStartScan = fileStartScan + overage;
+            %                 end
+            %
+            %                 if scansToRead > 0
+            %                     newData = GetDAQData(obj.hSGL,fileStartScan,scansToRead);
+            %                     fprintf('Read %d of %d scans directly starting from: %d\n',size(newData,1),scansToRead,fileStartScan);
+            %
+            %                 end
+            %             end
+            
+            function bufStartScanNum = znstAugmentSpikeDataBuffer(scansToRead, newData)
+                assert(ismember(size(obj.spikeDataBuffer,1),[0 diff(obj.spikeScanWindow)+1 obj.stimEventClassifyNumScans - 1]),'Expected spikeDataBuffer to be empty or exactly equal to size of spike window');
+                
+                %         if obj.bufScanNumEnd == 0
+                %         else
+                %           obj.bufScanNumEnd = obj.bufScanNumEnd + scansToRead; %End index of augmented spikeDataBuffer
+                %         end
+                
+                
+                obj.bufScanNumEnd = obj.maxReadableScanNum;
+                bufStartScanNum = obj.bufScanNumEnd - scansToRead - size(obj.spikeDataBuffer,1); %Start index of spikeDataBuffer (including previously read samples carried over from last timer batch, the last post-window worth not yet processed)
+                
+                
+                obj.spikeDataBuffer = [obj.spikeDataBuffer; newData];
+            end
+            
+            
+            function znstStoreNewSpikes(newSpikeScanNums,bufStartScanNum)
+                %fprintf('Storing %d new spikes for chan 17\n',length(newSpikeScanNums{17}));
+                scanWindowRelative = obj.spikeScanWindow(1):obj.spikeScanWindow(2);
+                waveformDisplay = strcmpi(obj.displayMode,'waveform');
+                
+                try
+                    for i=1:numPadChans
+                        
+                        numNewSpikes = length(newSpikeScanNums{i});
+                        
+                        %Update spike counts
+                        obj.spikeCount(i) = obj.spikeCount(i) + numNewSpikes;
+
+                        
+                        %In 'waveform' displayMode - clear all previous spike data
+                        if waveformDisplay
+                            obj.spikeData{i}.scanNums = [];
+                            obj.spikeData{i}.waveforms = cell(numNewSpikes,1);
+                        end
+                        
+                        if isempty(newSpikeScanNums{i})
+                            continue;
+                        end
+                        
+                        %Store new spike scan numbers
+                        if waveformDisplay
+                            obj.spikeData{i}.scanNums = newSpikeScanNums{i};
+                        else
+                            obj.spikeData{i}.scanNums = [obj.spikeData{i}.scanNums newSpikeScanNums{i}];
+                            obj.spikeData{i}.stimRelScanNums = [obj.spikeData{i}.stimRelScanNums zeros(1,numNewSpikes)];
+                            obj.spikeData{i}.stimNums = [obj.spikeData{i}.stimNums zeros(1,numNewSpikes)];
+                            obj.spikeData{i}.stimEventTypes = [obj.spikeData{i}.stimEventTypes repmat({''},1,numNewSpikes)];
+                        end
+                        
+                        %In 'waveform' displayMode - store new spike waveform data
+                        if waveformDisplay
+                            for j=1:numNewSpikes
+                                scanWindow = scanWindowRelative + newSpikeScanNums{i}(j);
+                                idxWindow = scanWindow - bufStartScanNum;
+                                
+                                %Handle case of spikes at very start of spike-plotting
+                                if find(idxWindow < 1) %'early' spike
+                                    waveform = zeros(length(idxWindow),1,'int16');
+                                    waveform(idxWindow < 1) = obj.spikeDataBuffer(1,i);
+                                    waveform(idxWindow >= 1) = obj.spikeDataBuffer(idxWindow >= 1,i);
+                                    
+                                    obj.spikeData{i}.waveforms{j} = waveform;
+                                else
+                                    obj.spikeData{i}.waveforms{j} = obj.spikeDataBuffer(idxWindow,i);
+                                end
+                                
+                            end
+                        end
+                        
+                        
+                        %assert(length(obj.spikeData{i}.scanNums) == length(obj.spikeData{i}.waveforms),'Length of waveforms and scanNums should always identically match');
+                        
+                    end
+                catch ME
+                    fprintf(1,'Error: %s\n',ME.message);
+                    ME.rethrow();
+                end
+            end
+            
+            function znstDetectStimulus(bufStartScanNum,changedFileName)
+                
+                if changedFileName || isempty(obj.stimLastEventScanNumWindow)
+                    spikeDataBufStartIdx = 1;
+                elseif obj.stimLastEventScanNumWindow(2) >= bufStartScanNum %Don't detect stimulus start if already within existing stimulus window
+                    spikeDataBufStartIdx = obj.stimLastEventScanNumWindow(2) - bufStartScanNum + 1;
+                else
+                    spikeDataBufStartIdx = 1;
+                end
+                
+                %Detect & record stimulus start and associated stimulus window
+                stimIdx = find(diff(obj.spikeDataBuffer(spikeDataBufStartIdx:end,obj.stimStartChannel + 1) > (obj.stimStartThreshold / obj.voltageScaleFactor)) == 1, 1); %Should not have off-by-one error -- lowest possible value is spikeDataBufferStartIdx+1 (if the second sample crosses threshold)
+                
+                if ~isempty(stimIdx)
+                    
+                    newStimScanNum = bufStartScanNum + stimIdx - 1;
+                    obj.stimScanNums(end+1) = newStimScanNum;
+                    
+                    obj.stimLastEventScanNumWindow = newStimScanNum + round(obj.stimTimeWindow/sampPeriod);
+                    
+                    if changedFileName
+                        obj.stimLastEventScanNumWindow = max(obj.stimLastEventScanNumWindow,bufStartScanNum);
+                    end
+                    
+                    obj.stimWindowStartScanNums(end+1) = obj.stimLastEventScanNumWindow(1);
+                    obj.stimWindowEndScanNums(end+1) = obj.stimLastEventScanNumWindow(2);
+                    obj.stimEventTypeNames{end+1} = '';
+                    
+                    obj.stimTotalCount = obj.stimTotalCount + 1;
+                    fprintf('Detected stim! stimTotalCount: %d stimScanNum: %d stimWindowStartScanNum: %d stimWindowEndScanNum: %d bufStartScanNum: %d\n',...
+                        obj.stimTotalCount,obj.stimScanNums(end),obj.stimWindowStartScanNums(end),obj.stimWindowEndScanNums(end),bufStartScanNum);
+                end
+                
+            end
+            
+            function znstClassifyStimulus(bufStartScanNum)
+                
+                %Loop through detected stimuli that have not been classified, from the end - classifying them if possible.
+                stimNum = length(obj.stimScanNums);
+                while isempty(obj.stimEventTypeNames{stimNum})
+                    
+                    if isempty(obj.stimEventTypes)
+                        obj.stimEventTypeNames{stimNum} = 'allstim';
+                        obj.stimEventCount_.allstim = obj.stimEventCount_.allstim + 1;
+                    elseif (obj.stimScanNums(stimNum) + obj.stimEventClassifyNumScans) <= (bufStartScanNum + length(obj.spikeDataBuffer)) %Have sufficient scans to classify the event
+                        
+                        startIdx = obj.stimScanNums(stimNum) - bufStartScanNum + 1;
+                        endIdx = obj.stimScanNums(stimNum) - bufStartScanNum + obj.stimEventClassifyNumScans ;
+                        
+                        %fprintf('bufStartScanNum: %d sizeSpikeDataBuf: %s startIdx: %d endIdx: %d \n',bufStartScanNum,mat2str(size(obj.spikeDataBuffer)),startIdx,endIdx);
+                        
+                        eventType = feval(obj.stimEventClassifyFcn,obj.spikeDataBuffer(startIdx:endIdx,obj.stimEventClassifyChannel+1));
+                        
+                        if isempty(eventType)
+                            fprintf(2,'WARNING: Failed to classify stimulus event type!\n');
+                            obj.stimEventTypeNames{stimNum} = 'unknown';
+                        else
+                            obj.stimEventTypeNames{stimNum} = eventType;
+                            obj.stimEventCount_.(eventType) = obj.stimEventCount_.(eventType) + 1;
+                        end
+                    end
+                    stimNum = stimNum - 1;
+                    if stimNum == 0
+                        break;
+                    end
+                end
+                
+            end
+            
+            function chanNewSpikes = znstTagSpikes()
+                %Tag stimulus-associated spikes that have been previously detected
+                %and stored. Spikes not associated with stimulus are cleared. If
+                %event-types are specified, spikes are tagged with name of
+                %associated stimulus event type.
+                
+                for i=1:length(obj.stimEventTypes_)
+                    chanNewSpikes.(obj.stimEventTypes_{i}) = zeros(numPadChans,1);
+                end
+                
+                %numNewSpikes = 0;
+                
+                taggedSpikeIdxStructInit = cell2struct(repmat({[]},length(obj.stimEventTypes_),1),obj.stimEventTypes_);
+                
+                for c=1:numPadChans
+                    
+                    taggedNewSpike = false;
+                    spikesToClear = [];
+                    taggedSpikeIdxsStruct = taggedSpikeIdxStructInit;
+                    
+                    %Loop through spikes from most recent backwards, tagging event-type if possible
+                    for spikeIdx = length(obj.spikeData{c}.scanNums):-1:1
+                        tmp1 =tic;
+                        
+                        %Reached previously-tagged spikes -- stop loop
+                        if obj.spikeData{c}.stimNums(spikeIdx) > 0
+                            % if c==17
+                            % fprintf('Tagged (or not) %d spikes for chan 17\n',length(obj.spikeData{c}.scanNums) - spikeIdx);
+                            % end
+                            break;
+                        end
+                        
+                        %VI051112: Unlike previously planned - spikeData won't be deleted on plotting.
+                        %assert(isempty(obj.spikeData{c}.stimEventTypes{spikeIdx}),'spikeData was stored longer than expected for an already stimulus event-tagged spike');
+                        
+                        %Find associated stim spike
+                        spikeScanNum = obj.spikeData{c}.scanNums(spikeIdx);
+                        
+                        stimIdx = find(spikeScanNum >= obj.stimWindowStartScanNums,1,'last');
+                        
+                        if ~isempty(stimIdx) && spikeScanNum <= obj.stimWindowEndScanNums(stimIdx)
+                            %Found associated stimulus: store stim info & event tag
+                            if isempty(obj.stimEventTypes)
+                                eventTag = 'allstim'; %All stim-associated spikes get plotted
+                            else
+                                eventTag = obj.stimEventTypeNames{stimIdx}; %Note - this might still be empty. That's OK...will try again to tag it the next time around.
+                            end
+                            
+                            if ~isempty(eventTag) && isempty(obj.spikeData{c}.stimEventTypes{spikeIdx})
+                                obj.spikeData{c}.stimEventTypes{spikeIdx} = eventTag;
+                                taggedSpikeIdxsStruct.(eventTag)(end+1) = spikeIdx; %Add spikeIdx to list of spikes associated with this eventTag
+                                
+                                obj.spikeData{c}.stimNums(spikeIdx) = stimIdx;
+                                obj.spikeData{c}.stimRelScanNums(spikeIdx) = spikeScanNum - obj.stimScanNums(stimIdx);
+                                
+                                chanNewSpikes.(eventTag)(c) = chanNewSpikes.(eventTag)(c) + 1;
+                                taggedNewSpike = true;
+                            end
+                            
+                        elseif spikeScanNum < (obj.maxReadableScanNum + round(obj.stimTimeWindow(1)/sampPeriod))
+                            %No hope of ever finding associated stimulus: mark for deletion
+                            spikesToClear(end+1) = spikeIdx;
+                        else
+                            %fprintf('spikeScanNum: %d maxReadableScanNum: %d preStimTime: %d mostRecentHopefulScan: %d\n',spikeScanNum,obj.maxReadableScanNum, round(obj.stimTimeWindow(1)/sampPeriod),(obj.maxReadableScanNum - round(obj.stimTimeWindow(1)/sampPeriod)));
+                            %Do nothing -- spike still has hope of finding associated stimulus
+                        end
+                        
+                    end
+                    
+                    %           if c==17
+                    %             fprintf('Spike tag processing time for chan 17: %g\n',toc(tmp1));
+                    %           end
+                    
+                    tmp1 = tic;
+                    %Maintain indices of stored spikes associated with each event, for per-event lookup %TODO: Determine if this speedup is actually apparent/important
+                    if taggedNewSpike
+                        for i=1:length(obj.stimEventTypes_)
+                            obj.spikeData{c}.stimEventTypeStruct.(obj.stimEventTypes_{i}) =  [obj.spikeData{c}.stimEventTypeStruct.(obj.stimEventTypes_{i}) (taggedSpikeIdxsStruct.(obj.stimEventTypes_{i}) - length(spikesToClear))];
+                        end
+                    end
+                    %           if c==17
+                    %             fprintf('Spike tag storage time for chan 17: %g\n',toc(tmp1));
+                    %           end
+                    
+                    %Clear 'orphan' spikes with no hope of finding associated stimulus
+                    tmp1 = tic;
+                    if ~isempty(spikesToClear)
+                        obj.spikeData{c}.scanNums(spikesToClear) = [];
+                        obj.spikeData{c}.stimNums(spikesToClear) = [];
+                        obj.spikeData{c}.stimRelScanNums(spikesToClear) = [];
+                        
+                        obj.spikeData{c}.stimEventTypes(spikesToClear) = [];
+                        
+                    end
+                    %           if c==17
+                    %             fprintf('Spike data clearing time for chan 17: %g\n',toc(tmp1));
+                    %           end
+                    
+                    %if c==17 && ~isempty(spikesToClear)
+                    %fprintf('Cleared %d spikes for chan 17\n',length(spikesToClear));
+                    %end
+                end
+                
+                %if numNewSpikes
+                %  fprintf('Tagged %d new spikes for chan 17\n',numNewSpikes);
+                %end
+            end
+            
+            function znstUpdateRMSAndMean(newSpikeScanNums,bufStartScanNum)
+                %Extract spikeDataBuffer data, excluding last spike-window post
+                %time (not yet processed for spikes), and excluding just-detected
+                %spike windows
+                
+                %newRmsData = cell(numPadChans,1);
+                %batchLength = zeros(numPadChans,1);
+                rmsDataIdxs = {1:(size(obj.spikeDataBuffer,1)-obj.spikeScanWindow(2))};
+                rmsDataIdxs = repmat(rmsDataIdxs,numPadChans,1);
+                
+                firstPassMode = isempty(newSpikeScanNums); %Handle first pass at RMS detection, when there are no detected spikes yet
+                
+                if ~firstPassMode
+                    for i=1:numPadChans
+                        %newRmsData{i} = obj.spikeDataBuffer(1:end-obj.spikeScanWindow(2),i);
+                        %batchLength(i) = length(newRmsData{i});
+                        
+                        %rmsDataIdxs{i} = 1:(size(obj.spikeDataBuffer,1)-obj.spikeScanWindow(2));
+                        
+                        spikeScanIdxs = newSpikeScanNums{i} - bufStartScanNum + 1;  %Convert scan numbers to spike-data-buffer indices
+                        
+                        %Exclude just-detected spike windows
+                        badIdxs = [];
+                        for j=1:length(spikeScanIdxs)
+                            %newRmsData{i}(spikeScanIdxs:min(end,(spikeScanIdxs+obj.spikeScanWindow(2)))) = [];
+                            badIdxs = [badIdxs spikeScanIdxs(j):min(rmsDataIdxs{i}(end),spikeScanIdxs(j)+obj.spikeScanWindow(2))];
+                        end
+                        rmsDataIdxs{i}(badIdxs) = [];
+                    end
+                end
+                
+                %fprintf('newRmsData chan 17 - size: %s out of %s\tclass: %s\n',mat2str(size(rmsDataIdxs{17})),mat2str(size(obj.spikeDataBuffer)),class(obj.spikeDataBuffer));
+                
+                
+                % Update mean & RMS computation for each pad channel
+                warnNoData = false;
+                for i=1:numPadChans
+                    if isempty(rmsDataIdxs{i})
+                        if ~warnNoData
+                            warning('For at least one channel (%d), no data was available for RMS/mean calculations',i);
+                            warnNoData = true;
+                        end
+                        continue;
+                    end
+                    
+                    %fprintf('Computing mean & RMS for channel %d. Num idxs to average: %d\tSDB size: %s\n',i,length(rmsDataIdxs{i}),mat2str(size(obj.spikeDataBuffer)));
+                    dataLen = length(rmsDataIdxs{i});
+                    if obj.filterWindow(1) > 0  %No need for per-channel mean subtraction if highpass-filtering
+                        obj.thresholdMean(i) = 0;
+                        obj.thresholdRMS(i) = sqrt(sum(double(obj.spikeDataBuffer(rmsDataIdxs{i},i)).^2)/dataLen);
+                    else %Use per-channel mean subtraction
+                        %dataDoub = double(newRmsData{i});
+                        obj.thresholdMean(i) = sum(double(obj.spikeDataBuffer(rmsDataIdxs{i},i)))/dataLen;
+                        obj.thresholdRMS(i) = sqrt(sum((double(obj.spikeDataBuffer(rmsDataIdxs{i},i)) - obj.thresholdMean(i)).^2)/dataLen);
+                    end
+                end
+                
+                %Redraw threshold lines, if it can change (only in case of 'mismatched' threshold type and display units)
+                if strcmpi(obj.thresholdType,'rmsMultiple') && strcmpi(obj.spikeAmpUnits,'volts')
+                    obj.zprvDrawThresholdLines();
+                end
+                
+                %Update last scan at which RMS has been computed
+                if ~firstPassMode
+                    obj.thresholdRMSLastScan = obj.bufScanNumEnd;
+                end
+                
+                
+            end
+            
+        end
+        
+        function newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum)
+            
+            if strcmpi(obj.thresholdType,'rmsMultiple')
+                if obj.thresholdRMSLastScan == 0 %No RMS data has been computed yet
+                    %newSpikeScanNums = cell(numPadChans,1);
+                    threshVal = obj.thresholdRMS * obj.INIT_RMS_THRESHOLD; %Use pre-set RMS multiplier for first buffer
+                else
+                    threshVal = obj.thresholdVal * obj.thresholdRMS;
+                end
+                
+                
+                if obj.filterWindow(1) > 0
+                    threshMean = 0; %Highpass filtering supercedes mean subtraction
+                else
+                    threshMean = obj.thresholdMean;
+                end
+                
+                [newSpikeScanNums, obj.maxNumSpikesApplied] = zlclDetectSpikes(obj.spikeData,obj.spikeDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,threshMean,obj.refreshPeriodMaxNumSpikes); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+                
+                %
+                %             if maxNumSpikesApplied && ~obj.maxNumSpikesApplied
+                %               fprintf(2,'WARNING: Exceeded maximum number of spikes (%d) on one or more channels; subsequent spikes were ignored.\n', obj.refreshPeriodMaxNumSpikes);
+                %             end
+                %
+                %             obj.maxNumSpikesApplied = maxNumSpikesApplied;
+                
+            else
+                threshVal = obj.thresholdVal / obj.voltageScaleFactor; %Convert to AD units
+                threshMean = 0; %Don't do mean subtraction
+                newSpikeScanNums = zlclDetectSpikes(obj.spikeData,obj.spikeDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,0,obj.refreshPeriodMaxNumSpikes); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+            end
+            
+            %         n = sum(cellfun(@(x)length(x),newSpikeScanNums));
+            %         if n > 100
+            %           fprintf('Detected %d new spikes, on %d different channels, in buffer of size %d!\n',n,length(find(cellfun(@(x)~isempty(x),newSpikeScanNums))),size(obj.spikeDataBuffer,1));
+            %           %fprintf('Spikes were on channels: %s\n',mat2str(find(cellfun(@(x)~isempty(x),newSpikeScanNums))));
+            %         end
+            
+        end
+        
+        function zprvRefreshRasterGrid(obj,chanNewSpikes)
+            numPadChans = length(obj.spikeData);
+            sampPeriod = 1 / obj.sglParamCache.niSampRate;
+            colorOrder = get(0,'DefaultAxesColorOrder');
+            
+            plotAllSpikes = (nargin < 2);
+            if plotAllSpikes
+                obj.zprvResetStimNumsPlotted();
+            end
+            
+            %Update vert axis limits if needed (i.e. if upper limit is set to Inf)
+            ylim = obj.zprvStimNumDisplayRange2YLim(obj.stimNumDisplayRange);
+            if ~isequal(get(obj.hRasters(1),'YLim'),obj.stimNumDisplayRange)
+                set(obj.hRasters,'YLim',ylim);
+            end
+            
+            if isempty(obj.stimEventTypes)
+                eventTypes = {'allstim'};
+            else
+                eventTypes = obj.stimEventTypeDisplayed;
+            end
+            
+            if isscalar(eventTypes)
+                eventType = eventTypes{1};
+            end
+            
+            %Determine eventColorIdx up front, in cases where only one event type is being displayed
+            if isempty(obj.stimEventTypes)
+                eventColorIdx = 1;
+            elseif isscalar(eventTypes)
+                [tf,eventColorIdx] = ismember(eventType,obj.stimEventTypes);
+                assert(tf);
+            end
+            
+            %Add new line object for stim-associated spikes
+            
+            plotCount = 0;
+            for c=obj.tabChanNumbers
+                plotCount = plotCount + 1;
+                
+                %if isempty(obj.spikeData{j}) || chanNewSpikes(j) == 0 || isempty(obj.spikeData{j}.stimEventTypeStruct)
+                if isempty(obj.spikeData{c}.scanNums) || (~plotAllSpikes && all(structfun(@(x)x(c)==0,chanNewSpikes)))
+                    continue;
+                end
+                
+                %Ensure only newly stim-associated spikes are plotted (unless refreshing whole plot)
+                if isscalar(eventTypes)
+                    plotSpikeIdxs = obj.spikeData{c}.stimEventTypeStruct.(eventType);
+                    if ~plotAllSpikes
+                        plotSpikeIdxs(1:(length(plotSpikeIdxs) - chanNewSpikes.(eventType)(c))) = [];
+                    end
+                else
+                    %Find last-tagged spike for this channel
+                    
+                    for lastTaggedSpikeIdx=length(obj.spikeData{c}.stimEventTypes):-1:0
+                        if lastTaggedSpikeIdx > 0 && ~isempty(obj.spikeData{c}.stimEventTypes{lastTaggedSpikeIdx})
+                            break;
+                        end
+                    end
+                    if lastTaggedSpikeIdx==0
+                        break;
+                    end
+                    
+                    if plotAllSpikes
+                        plotSpikeIdxs = 1:lastTaggedSpikeIdx;
+                    else
+                        allEventTypes = obj.stimEventTypes;
+                        numNewSpikes = 0;
+                        for i=1:length(allEventTypes)
+                            numNewSpikes = numNewSpikes + chanNewSpikes.(allEventTypes{i})(c);
+                        end
+                        
+                        plotSpikeIdxs = (lastTaggedSpikeIdx-numNewSpikes+1):lastTaggedSpikeIdx;
+                    end
+                end
+                
+                if c==17 && ~plotAllSpikes
+                    fprintf('Plotting %d spikes for chan %d\n',length(plotSpikeIdxs),c);
+                end
+                
+                %Number stims by their order within the event type(s) selected
+                if isscalar(eventTypes)
+                    stimNumsPlotted = obj.stimNumsPlotted(c).(eventType);
+                else
+                    stimNumsPlotted = obj.stimNumsPlotted{c};
+                end
+                
+                [uniqueStimNums,~,orderedStims] = unique(obj.spikeData{c}.stimNums(plotSpikeIdxs),'sorted'); %orderedStims has same length as plotSpikeIdxs
+                
+                %TODO: Remove this when enough testing confirms this never happens
+                haveUntaggedStims = ~isempty(uniqueStimNums) && any(uniqueStimNums == 0);
+                assert(~haveUntaggedStims,'The plotSpikeIdxs identified contain one or more untagged spikes');
+                
+                
+                %Determine ordering of stims in relation to previously plotted lines (determine stims that have been plotted, partially or fully before, for determining base count)
+                repeatStims = [];
+                idx = length(stimNumsPlotted);
+                while idx > 0
+                    if ismember(stimNumsPlotted(idx),uniqueStimNums)
+                        repeatStims(end+1) = stimNumsPlotted(idx);
+                        idx = idx - 1;
+                    else
+                        break;
+                    end
+                end
+                
+                orderedStimBaseNum = length(stimNumsPlotted) - length(repeatStims);
+                orderedStims = orderedStims + orderedStimBaseNum;
+                
+                if isscalar(eventTypes)
+                    
+                    %Plot line of new stim-associated spikes -- note 1) line can have points spanning more than one stim and 2) may not (typically won't) have all the spikes of a given stim
+                    line('Parent',obj.hRasters(plotCount),'XData',obj.spikeData{c}.stimRelScanNums(plotSpikeIdxs) * sampPeriod,'YData', orderedStims,'Marker','d','MarkerSize',2,'Color',colorOrder(eventColorIdx,:),'LineStyle','none'); %,'EraseMode','none');
+                    
+                else
+                    startIdxs = [1; find(diff(orderedStims))+1];
+                    endIdxs = [startIdxs(2:end) - 1; length(plotSpikeIdxs)];
+                    
+                    assert(length(startIdxs) == length(uniqueStimNums));
+                    
+                    if plotAllSpikes
+                        %Determine event type for each uniqueStimNumber, encoded as an index into the eventTypes array
+                        [~,eventClassOrder] = ismember(obj.stimEventTypeNames(uniqueStimNums),eventTypes);
+                        
+                        %Plot stimulus spike records for each event type, in stimulus order within each event type grouping
+                        stimsPlotted = length(stimNumsPlotted);
+                        for i=1:length(eventTypes)
+                            stimNums = find(eventClassOrder == i);
+                            
+                            for j=1:length(stimNums)
+                                stimNum = stimNums(j);
+                                startIdx = startIdxs(stimNum);
+                                endIdx = endIdxs(stimNum);
+                                
+                                %Plot line of new stim-associated spikes for a particular stimulus. Note line may not (typically won't) have all the spikes for the given stim
+                                line('Parent',obj.hRasters(plotCount),'XData',obj.spikeData{c}.stimRelScanNums(plotSpikeIdxs(startIdx:endIdx)) * sampPeriod,'YData', (stimsPlotted+1) * ones(endIdx-startIdx+1,1),'Marker','d','MarkerSize',2,'Color',colorOrder(i,:),'LineStyle','none'); %'EraseMode','none');
+                                stimsPlotted = stimsPlotted + 1;
+                            end
+                            
+                        end
+                        
+                    else
+                        %Plot stimulus spike records in temporal order, color-coded by event type
+                        for i=1:length(uniqueStimNums)
+                            
+                            [~,eventColorIdx] = ismember(obj.stimEventTypeNames(uniqueStimNums(i)),obj.stimEventTypes);
+                            %assert(tf);
+                            
+                            startIdx = startIdxs(i);
+                            endIdx = endIdxs(i);
+                            
+                            %Plot line of new stim-associated spikes for a particular stimulus. Note line may not (typically won't) have all the spikes for the given stim
+                            line('Parent',obj.hRasters(plotCount),'XData',obj.spikeData{c}.stimRelScanNums(plotSpikeIdxs(startIdx:endIdx)) * sampPeriod,'YData', orderedStims(startIdx:endIdx),'Marker','d','MarkerSize',2,'Color',colorOrder(eventColorIdx,:),'LineStyle','none'); %,'EraseMode','none');
+                            
+                        end
+                    end
+                end
+                
+                %Update stimNumsPlotted
+                if isscalar(eventTypes)
+                    obj.stimNumsPlotted(c).(eventType) = [stimNumsPlotted setdiff(uniqueStimNums,repeatStims)];
+                else
+                    obj.stimNumsPlotted{c} = [stimNumsPlotted setdiff(uniqueStimNums,repeatStims)];
+                end
+                
+            end
+            
+        end
+        
+        function zprvPlotNewSpikes(obj)
+            numPadChans = length(obj.spikeData);
+            
+            linesToRedraw = [];
+            totalNewSpikes = 0;
+            totalNewLines = 0;
+            totalReusedLines = 0;
+            
+            %totalClearedSpikes = 0;
+            for i=obj.tabChanNumbers
+                
+                if isempty(obj.spikeData{i})
+                    continue;
+                end
+                
+                plotIdx = mod(i-1,obj.PLOTS_PER_TAB) + 1;
+                
+                numNewSpikes = length(obj.spikeData{i}.scanNums);
+                totalNewSpikes = totalNewSpikes + numNewSpikes;
+                
+                %Plot new spike lines
+                spikeScanWindowLength = diff(obj.spikeScanWindow)+1;
+                xData = linspace(obj.spikeTimeWindow(1),obj.spikeTimeWindow(2),spikeScanWindowLength)';
+                
+                newSpikeCounts = obj.lastPlottedSpikeCount(i) + (1:numNewSpikes);
+                lineIdxs = mod(newSpikeCounts,obj.spikesPerPlot) + 1; %The line object indices to use for these newly detected spikes
+                
+                for j=1:numNewSpikes
+                    
+                    waveform = obj.spikeData{i}.waveforms{j};
+                    
+                    assert(length(waveform) == length(xData),'Waveform data for chan %d, spike %d not of expected length (%d)\n',i,j,length(xData));
+                    
+                    %Scale waveform from A/D units to target units, applying mean subtraction if thresholdType='rmsMultiple'
+                    switch obj.spikeAmpUnits
+                        case 'volts'
+                            if strcmpi(obj.thresholdType,'volts') %no mean subtraction...just show as is
+                                waveform = double(waveform) * obj.voltageScaleFactor;
+                            else  %RMS-multiple threshold --> do mean subtraction
+                                waveform = (double(waveform) - obj.thresholdMean(i)) * obj.voltageScaleFactor;
+                            end
+                        case 'rmsMultiple'
+                            if obj.filterWindow(1) > 0
+                                waveform = double(waveform) / obj.thresholdRMS(i);
+                            else %Use mean subtraction
+                                waveform = (double(waveform) - obj.thresholdMean(i)) / obj.thresholdRMS(i);
+                            end
+                    end
+                    
+                    %If all lines have been used for this channel, handle spikesPerPlotClearMode = 'all'
+                    if mod(lineIdxs(j)-1,obj.spikesPerPlot) == 0 && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
+                        for k=1:length(obj.hSpikeLines{i})
+                            obj.hSpikeLines{i}(k).XData = [];
+                            obj.hSpikeLines{i}(k).YData = [];
+                        end
+                    end
+                    
+                    obj.hSpikeLines{i}(lineIdxs(j)).XData = xData;
+                    obj.hSpikeLines{i}(lineIdxs(j)).YData = waveform;                   
+                    obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;
+                    
+                    %                     if length(obj.hSpikeLines{i}) < obj.spikesPerPlot %Create new line object
+                    %                         if strcmpi(obj.spikesPerPlotClearMode,'all')
+                    %                             obj.hSpikeLines{i}(j) = line('Parent',obj.hPlots(plotIdx),'XData',xData,'YData',waveform); %,'EraseMode','none');
+                    %                             %set(obj.hSpikeLines{i}(end),'EraseMode','none');
+                    %                         else
+                    %                             obj.hSpikeLines{i}(end+1) = line('Parent',obj.hPlots(plotIdx),'XData',xData,'YData',waveform); %,'EraseMode','normal');
+                    %                         end
+                    %
+                    %                         totalNewLines = totalNewLines + 1;
+                    %
+                    %                     else
+                    %                         switch obj.spikesPerPlotClearMode
+                    %                             case 'all' %Clear all previous lines & draw new spike waveform
+                    %                                 obj.zprvClearPlots('waveform',true);
+                    %                                 obj.hSpikeLines{plotIdx}(end+1) = line('Parent',obj.hPlots(plotIdx),'XData',xData,'YData',waveform); %,'EraseMode','none');
+                    %                                 %set(obj.hSpikeLines{i}(end),'EraseMode','none');
+                    %
+                    %                                 totalNewLines = totalNewLines + 1;
+                    %
+                    %                             case 'oldest' %Reuse existing line object
+                    %                                 obj.hSpikeLines{plotIdx} = [obj.hSpikeLines{plotIdx}(2:end) obj.hSpikeLines{plotIdx}(1)];
+                    %                                 set(obj.hSpikeLines{plotIdx}(end),'YData',waveform);
+                    %
+                    %                                 totalReusedLines = totalReusedLines + 1;
+                    %                         end
+                    %
+                    %                     end
+                    
+                end
+                
+            end
+            
+            %set(linesToRedraw,'EraseMode','normal');
+            
+            %       if ~isem %       tic;pty(linesToRedraw)
+            %         set(linesToRedraw,'EraseMode','normal');
+            %         %delete(linesToDelete);
+            %         %fprintf('Deleted %d lines\n',length(linesToDelete));
+            %       end
+            %       toc;
+            
+            %drawnow expose update;
+            %fprintf('Plotted %d new spikes with %d new lines and %d reused lines\n',totalNewSpikes,totalNewLines,totalReusedLines);
+            
+            %set(linesToRedraw,'EraseMode','none');
+            
+            %
+            %       for i=1:numPadChans
+            %         if ~isempty(obj.hSpikeLines{i})
+            %           set(obj.hSpikeLines{i},'EraseMode','none');
+            %         end
+            %       end
+            
+        end
+        
+        
+        function zprvSetAxesProps(obj,hAx)
+            %Axes properties for spoke waveform grid axes
+            set(hAx,'XTick',0,'YTick',0,'XGrid','on','YGrid','on','XTickLabel','','YTickLabel','');
+        end
+        
+        %     function zprvResetThreshold(obj)
+        %
+        %       %TODO(?): A smarter adjustment based on the last-cached RMS values, somehow handlign the variety across channels
+        %         switch obj.spikeAmpUnits
+        %           case 'volts'
+        %               obj.thresholdVal = .1 * obj.hSpoke.x_fs;
+        %           case 'rmsMultiple'
+        %             obj.thresholdVal= 5;
+        %         end
+        %
+        %         %Updates threshold value, and threshold lines in process
+        %         obj.thresholdVal = newThreshVal;
+        %     end
+        %
+        %     function zprvResetUnits(obj)
+        %
+        %
+        %     end
+        
+        function zprvDrawThresholdLines(obj)
+            numChans = obj.numChans;
+            numPadChans = numChans - obj.numAuxChans;
+            
+            %Clear existing threshold lines
+            handlesToClear = [obj.hThresholdLines{1}(isgraphics(obj.hThresholdLines{1})); obj.hThresholdLines{2}(isgraphics(obj.hThresholdLines{2}))];
+            %set(handlesToClear,'EraseMode','normal');
+            delete(handlesToClear);
+            
+            %Compute all-channel threshold; determine lack of threshold val -- as applicable
+            perChanThreshold = ~strcmpi(obj.thresholdType,obj.spikeAmpUnits);
+            if perChanThreshold %RMS threshold with voltage units -- this is only mismatch type presently allowed
+                if isempty(obj.thresholdRMS)
+                    obj.hThresholdLines = repmat({ones(numPadChans,1) * -1},2,1);
+                    return; %nothing to draw
+                end
+            else %matched units/threshold-type
+                threshold = obj.thresholdVal;
+            end
+            
+            %Draw threshold for each channel, computing for each channel if needed
+            xData = obj.spikeTimeWindow;
+            
+            for i=obj.tabChanNumbers
+                
+                plotIdx = mod(i-1,obj.PLOTS_PER_TAB) + 1;
+                
+                if perChanThreshold
+                    threshold = obj.thresholdVal * obj.thresholdRMS(i) * obj.voltageScaleFactor;
+                end
+                
+                if ~isempty(threshold)
+                    dataArgs = {'XData',xData,'YData',[threshold threshold]};
+                    
+                    if obj.thresholdAbsolute
+                        dataArgs2 = {'XData',xData,'YData',[-threshold -threshold]};
+                    end
+                    
+                    if numel(obj.hThresholdLines{1}) < plotIdx || ~isgraphics(obj.hThresholdLines{1}(plotIdx))
+                        obj.hThresholdLines{1}(plotIdx) = line('Parent',obj.hPlots(plotIdx),'Color','r',dataArgs{:}); %'EraseMode','none',
+                        
+                        if obj.thresholdAbsolute
+                            obj.hThresholdLines{2}(plotIdx) = line('Parent',obj.hPlots(plotIdx),'Color','r',dataArgs2{:}); %'EraseMode','none',
+                        end
+                    else
+                        set(obj.hThresholdLines{1}(plotIdx),dataArgs{:});
+                        if obj.thresholdAbsolute
+                            set(obj.hThresholdLines{2}(plotIdx),dataArgs2{:});
+                        end
+                    end
+                end
+                
+            end
+            
+        end
+        
+        function zprvResetAcquisition(obj,fileRollover)
+            %Method to handle acquisition 'reset' cases, either hard (SpikeGL is stopped & restarted) or soft (file rollover)
+            
+            if nargin < 2
+                fileRollover = false;
+            end
+            
+            
+            numChans = obj.numChans;
+            numPadChans = numChans - obj.numAuxChans;
+            
+            obj.spikeDataBuffer = zeros(0,numChans);
+            
+            if ~fileRollover && strcmpi(obj.thresholdType,'rmsMultiple')
+                obj.thresholdRMS = zeros(numPadChans,1);
+                obj.thresholdMean = zeros(numPadChans,1);
+                obj.thresholdRMSLastScan = 0;
+            end
+            
+            if ~isempty(obj.filterCoefficients)
+                obj.filterCondition = zeros(max(cellfun(@length,obj.filterCoefficients)) - 1, 1);
+            end
+            
+            obj.bufScanNumEnd = 0;
+            obj.stimLastEventScanNumWindow = [];
+            
+            if ~fileRollover
+                obj.zprvResetSpikeData();
+            end
+            
+        end
+        
+        function zprvResetSpikeData(obj)
+            
+            numPadChans = obj.numChans -  obj.numAuxChans;
+            
+            obj.spikeCount = zeros(numPadChans,1);
+            obj.lastPlottedSpikeCount = zeros(numPadChans,1);
+            
+            obj.spikeData = cell(numPadChans,1);
+            for i=1:numPadChans
+                if strcmpi(obj.displayMode,'waveform')
+                    obj.spikeData{i} = struct('scanNums',[],'waveforms',{{}});
+                else
+                    obj.spikeData{i} = struct('scanNums',[],'stimRelScanNums',[],'stimNums',[],'stimEventTypes',{{}},'stimEventTypeStruct',struct());
+                    %             obj.spikeData{i} = struct();
+                    %
+                    %             eventTypes = obj.stimEventTypes;
+                    %             if isempty(eventTypes)
+                    %               obj.spikeData{i}.plot = struct('scanNums',[],'stimRefScanNum',[],'stimNum',[]);
+                    %             else
+                    %               for j=1:length(eventTypes)
+                    %                 obj.spikeData{i}.(eventTypes{j}) = struct('scanNums',[],'stimRefScanNum',[],'stimNum',[]);
+                    %               end
+                    %             end
+                end
+            end
+        end
+        
+        function zprvResetStimNumsPlotted(obj)
+            
+            obj.stimNumsPlotted = struct(); %Clears existing struct data
+            
+            if isempty(obj.stimEventTypes)
+                obj.stimNumsPlotted(obj.numChans).allstim = [];
+            elseif isscalar(obj.stimEventTypeDisplayed)
+                for i=1:length(obj.stimEventTypes)
+                    obj.stimNumsPlotted(obj.numChans).(obj.stimEventTypes{i}) = [];
+                end
+            else
+                obj.stimNumsPlotted = cell(obj.numChans,1); %Cell array of empty arrays
+            end
+            
+        end
+        
+        function zprvClearPlots(obj,displaysToClear,reuseThreshold)
+            % displaysToClear: String or string cell array containing one or more of {'waveform' 'raster' 'psth'}. Used to signal this operation is specifically to clear plots for one of the display modes in particular.
+            % reuseThreshold: <Default=true> If true, redraw the threshold lines based on the value that was prevailing before the plots are cleared
+            
+            if nargin < 3
+                reuseThreshold = true;
+            end
+            
+            %Don't bother clearing a plot that's invisible (or should be)
+            if ischar(displaysToClear)
+                displaysToClear = {displaysToClear};
+            end
+            
+            shouldBeCleared = setdiff(displaysToClear,{'psth' obj.displayMode});
+            if ~isempty(shouldBeCleared)
+                cellfun(@(x)set(obj.hFigs.(x),'Visible','off'),shouldBeCleared); %Should already be off
+            end
+            
+            if isempty(setdiff(displaysToClear,shouldBeCleared))
+                return;
+            end
+            
+            if nargin < 3
+                refreshThreshold = true;
+            end
+            
+            redrawThresholdLines = false;
+            
+            for i=1:length(displaysToClear)
+                for j=1:min(obj.PLOTS_PER_TAB,numel(obj.hThresholdLines{1}))
+                    
+                    displayToClear = displaysToClear{i};
+                    
+                    switch displayToClear
+                        case 'waveform'
+                            
+                            %Clear out graphics
+                            %delete(obj.hSpikeLines{j}(isgraphics(obj.hSpikeLines{j})));                                                       
+                            for k=1:length(obj.hSpikeLines{j})
+                                obj.hSpikeLines{j}(k).XData = [];
+                                obj.hSpikeLines{j}(k).YData = [];
+                            end                                
+                            
+                            reuseThreshold = isgraphics(obj.hThresholdLines{1}(j)) && reuseThreshold;
+                            if reuseThreshold
+                                threshold = unique(get(obj.hThresholdLines{1}(j),'YData'));
+                                
+                                if isgraphics(obj.hThresholdLines{2}(j))
+                                    threshold = [threshold -threshold];
+                                end
+                            end
+
+                            cla(obj.hPlots(j));
+                            obj.zprvSetAxesProps(obj.hPlots(j));
+                            
+                            if reuseThreshold
+                                for k=1:length(threshold)
+                                    obj.hThresholdLines{k}(j) = line('Parent',obj.hPlots(j),'Color','r','XData',obj.spikeTimeWindow,'YData',[threshold(k) threshold(k)]); %'EraseMode','none',
+                                end
+                            else %Compute/draw threshold lines from scratch
+                                redrawThresholdLines = true;
+                            end
+                            
+                        case 'raster'
+                            cla(obj.hRasters(j));
+                            obj.zprvSetAxesProps(obj.hRasters(j));
+                            
+                        case 'psth'
+                            cla(obj.hPSTHs(j));
+                            obj.zprvSetAxesProps(obj.hPSTHs(j));                            
+                    end
+                    
+                    %preallocate lines for spike lines
+                    obj.hSpikeLines{j} = gobjects(obj.spikesPerPlot,1);
+                    
+                    for k=1:obj.spikesPerPlot
+                        obj.hSpikeLines{j}(k) = line('Parent',obj.hPlots(j),'XData',[], 'YData', []);                        
+                    end
+                    
+                end
+            end
+            
+            if redrawThresholdLines
+                obj.zprvDrawThresholdLines();
+            end
+            
+    
+            
+            
+        end
+        
+        function ylim = zprvStimNumDisplayRange2YLim(obj,val)
+            ylim = val + [-1 0]; %Ensure the first element is seen
+            if isinf(ylim(2))
+                numStimsToDisplay = max(obj.stimEventCount - ylim(1) + 1,1);
+                
+                numIncrementFactor = numStimsToDisplay/obj.stimNumDisplayRangeInfIncrement;
+                numIncrementsNeeded = ceil(numIncrementFactor);
+                lastIncrementFraction = 1 - (numIncrementsNeeded - numIncrementFactor);
+                
+                if lastIncrementFraction > obj.RASTER_DISP_STIM_RANGE_INCREMENT_FRACTION
+                    numIncrementsNeeded = numIncrementsNeeded + 1;
+                end
+                
+                ylim = [ylim(1) numIncrementsNeeded * obj.stimNumDisplayRangeInfIncrement];
+            end
+        end
+        
+    end
+    
+    
+    %% ABSTRACT PROPERTY REALIZATIONS (most.Model)
+    properties (Hidden,SetAccess=protected)
+        mdlPropAttributes = zlclInitPropAttributes();
+        mdlHeaderExcludeProps = {};
+    end
+    
+    
+end
+
+
+%% LOCAL FUNCTIONS
+
+function [newSpikeScanNums, maxNumSpikesApplied] = zlclDetectSpikes(spikeData,spikeDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,thresholdMean,maxNumSpikes)
+%Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+%
+% spikeData: Cell array, one element per channel, containing data for each detected spike (from earlier timer callback period(s))
+% spikeDataBuffer: Array of recently acquired scans (samples)
+% bufStartScanNum: Scan number of first element in spikeDataBuffer
+% postSpikeNumScans: Number of scans following each detected spike to exclude from spike detection (the spike detection 'refractory period')
+% thresholdVal: May be a scalar, or a vector with one value per channel
+% thresholdAbsolute: Logical. If true, both crossings above thresholdVal or below -thresholdVal are considered spikes.
+% thresholdMean: Mean value to subtract from data before detecting threshold crossings.
+% maxNumSpikes: Scalar, indicating max number of spikes to detect per channel (from the start of the spikeDataBuffer)
+%
+% NOTES:
+%  VI050812: Not clear that recentSpikeScanNums can ever be non-empty -- might be able to get rid of this logic (and spikeData argument) altogether?
+
+maxNumSpikesApplied = false;
+numPadChans = length(spikeData);
+newSpikeScanNums = cell(numPadChans,1);
+
+spikesFoundPerChan = zeros(numPadChans,1);
+
+if isscalar(thresholdVal)
+    thresholdVal = repmat(thresholdVal,numPadChans,1);
+end
+
+if isscalar(thresholdMean)
+    thresholdMean = repmat(thresholdMean,numPadChans,1);
+end
+
+for i=1:numPadChans
+    
+    %Determine recent (already detected) spike scan numbers to exclude from spike search
+    lastSpikeScanNumIdx = find(spikeData{i}.scanNums < bufStartScanNum,1,'last');
+    if isempty(lastSpikeScanNumIdx)
+        recentSpikeScanNums = spikeData{i}.scanNums;
+    else
+        recentSpikeScanNums = spikeData{i}.scanNums(lastSpikeScanNumIdx + 1:end);
+    end
+    
+    %Find new spikes one at a time, imposing refractory period
+    spikesFound = 0;
+    scansToSearch = size(spikeDataBuffer,1) - postSpikeNumScans;
+    
+    %maxIdx = bufStartScanNum + scansToSearch;
+    currIdx = 1; %Index into spikeDataBuffer
+    
+    while currIdx < scansToSearch
+        %fprintf('currIdx: %d scansToSearch: %d postSpikeNumScans: %d\n',currIdx,scansToSearch,postSpikeNumScans);
+        %Find at most one spike (threshold crossing) in the spikeDataBuffer
+        if thresholdAbsolute %Find crossings above or below absolute threshold level
+            nextSpikeIdx = currIdx + find(diff(abs(spikeDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i)) > abs(thresholdVal(i))) == 1,1);
+        else
+            if thresholdVal >= 0 %Find crossings above threshold level
+                nextSpikeIdx = currIdx + find(diff((spikeDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
+            else %Find crossings below threshold level
+                nextSpikeIdx = currIdx + find(diff((spikeDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
+            end
+        end
+        
+        if isempty(nextSpikeIdx) %no spikes found in whole remainder of spikeDataBuffer
+            break;
+        else
+            spikesFound = spikesFound + 1;
+            if spikesFound > maxNumSpikes
+                maxNumSpikesApplied = true;
+                break;
+            end
+        end
+        
+        nextSpikeScanNum = bufStartScanNum + nextSpikeIdx - 1;
+        
+        %Add new spike, if not added already
+        if ~ismember(nextSpikeScanNum,recentSpikeScanNums)
+            newSpikeScanNums{i}(end+1) = nextSpikeScanNum;
+            spikesFoundPerChan(i) = spikesFoundPerChan(i) + 1;
+        end
+        
+        %Impose refractory period
+        currIdx = nextSpikeIdx + postSpikeNumScans; %Will start with final scan of the post-spike-window...to use as first scan for next diff operation (first element never selected)
+        
+    end
+    
+end
+end
+
+function s = zlclInitPropAttributes()
+
+s.running = struct('Classes','binaryflex','Attributes','scalar');
+
+s.numAuxChans = struct();
+s.gatingChannel = struct('Attributes',{{'integer' 'finite' 'nonnegative'}},'AllowEmpty',1);
+s.stimStartChannel = struct('Attributes',{{'integer' 'finite' 'nonnegative'}},'AllowEmpty',1);
+
+s.displayMode = struct('Options',{{'waveform' 'raster'}});
+s.tabDisplayed = struct('Attributes',{{'scalar' 'finite' 'positive' 'integer'}});
+
+s.thresholdType = struct('Options',{{'volts' 'rmsMultiple'}});
+s.thresholdVal = struct('Attributes',{{'scalar' 'nonempty' 'finite'}});
+s.thresholdAbsolute = struct('Classes','binaryflex','Attributes','scalar');
+s.thresholdRMSRefreshPeriod = struct('Attributes',{{'scalar' 'positive' 'finite'}});
+s.thresholdRMSRefreshOnRetrigger = struct('Classes','binaryflex','Attributes','scalar');
+
+s.spikeTimeWindow = struct('Attributes',{{'numel' 2 'finite'}});
+%s.spikeAmpWindow = struct('Attributes',{{'finite' '1d'}});
+s.spikeAmpWindow = struct('Attributes',{{'numel' 2 'finite'}});
+
+s.spikeAmpUnits = struct('Options',{{'volts' 'rmsMultiple'}});
+
+s.gatingThreshold = struct('Attributes',{{'scalar' 'finite'}});
+s.gatingDuration = struct('Attributes',{{'scalar' 'finite'}});
+
+s.spikesPerPlot = struct('Attributes',{{'scalar' 'finite' 'positive'}});
+s.spikesPerPlotClearMode = struct('Options',{{'all' 'oldest'}});
+s.spikeRefractoryPeriod = struct('Attributes',{{'scalar' 'finite' 'nonnegative'}});
+
+s.dataReadMode = struct('Options',{{'file' 'spikeGL'}});
+
+s.filterWindow = struct('Attributes',{{'nonnegative' 'numel' 2}});
+s.globalMeanSubtraction = struct('Classes','binaryflex','Attributes','scalar');
+
+s.stimStartThreshold = struct('Attributes',{{'finite' 'scalar'}});
+s.stimEventTypeDisplayed = struct();
+s.stimTimeWindow = struct('Attributes',{{'numel' 2 'finite'}});
+s.stimNumDisplayRange = struct('Attributes',{{'numel' 2 'nonnegative'}});
+s.stimNumDisplayRangeInfIncrement = struct('Attributes',{{'positive' 'scalar' 'finite'}});
+s.stimEventClassifyFcn = struct();
+
+s.refreshRate = struct('Attributes',{{'finite' 'positive' 'scalar'}});
+s.refreshPeriodMaxSpikeRate = struct('Attributes',{{'scalar' 'positive'}});
+
+s.psthTimeBin = struct('Attributes',{{'nonnegative' 'scalar' 'finite'}});
+s.psthAmpRange = struct('Attributes',{{'nonnegative' 'finite' 'numel' 2}});
+s.psthTimerPeriod = struct('Attributes',{{'positive' 'scalar'}});
+
+end
