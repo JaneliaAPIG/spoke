@@ -56,8 +56,16 @@ desktop.ini
 *~
 *.autosave
 
+# MATLAB-specific
+*.mat
+*.asv
+
 # Other
 *.bin
+
+
+
+
 
 
 
