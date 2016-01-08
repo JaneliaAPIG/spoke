@@ -287,9 +287,9 @@ classdef SpikeGrid < most.Model
             
             %Process inputs
             obj.sglIPAddress = sglIPAddress;
-            sgl = SpikeGL(sglIPAddress);
-            obj.sglParamCache = GetParams(sgl); %initialize SpikeGL param cache
-            Close(sgl);
+            obj.hSGL = SpikeGL(sglIPAddress);
+            
+            obj.sglParamCache = GetParams(obj.hSGL); %initialize SpikeGL param cache
             
             
             %Create class-data file
@@ -310,16 +310,24 @@ classdef SpikeGrid < most.Model
             aiRangeMax = obj.sglParamCache.niAiRangeMax;
             
             obj.voltageScaleFactor = aiRangeMax / 2^(obj.SGL_BITS_PER_SAMPLE - 1);
+            obj.refreshRate = obj.refreshRate; %apply default value
             
+            obj.zprvResetSpikeData();
+                        
+            %Initialize a default display for appearances (though it gets overridden by processing on start())
+            obj.zprvApplyChanOrderAndSubset();
+
             maxNumDispChans = numel(obj.neuralChansAvailable);
             obj.hThresholdLines = repmat({ones(maxNumDispChans,1) * -1},2,1);
             obj.hSpikeLines = cell(maxNumDispChans,1);
             
             obj.spikeAmpWindow = [-aiRangeMax aiRangeMax];
             obj.tabDisplayed = 1;
-            obj.refreshRate = obj.refreshRate; %apply default value
             
-            obj.zprvResetSpikeData();
+            %Clean-up
+            Close(obj.hSGL);
+            obj.hSGL = [];                        
+
         end
         
         function initialize(obj)
@@ -854,10 +862,10 @@ classdef SpikeGrid < most.Model
                 dispType = obj.displayMode;
                 
                 %Update tabChanNumbers
-                numDispChans = numel(obj.neuralChansAvailable); %#ok<*MCSUP>
+                maxNumDispChans = numel(obj.neuralChansAvailable); %#ok<*MCSUP>
                 
                 tcn = (1:obj.PLOTS_PER_TAB) + (val-1)*obj.PLOTS_PER_TAB;
-                tcn(tcn > numDispChans) = [];
+                tcn(tcn > maxNumDispChans) = [];
                 obj.tabChanNumbers = tcn; %One-based channel index
                 
                 %Clear grid waveform/raster plots
@@ -993,21 +1001,7 @@ classdef SpikeGrid < most.Model
             %TODO: Consider to allow further subsetting by Spoke user, to give faster Spoke processing
             obj.zprvAssertAvailChansConstant();
             
-            if isempty(obj.sglParamCache.snsChanMapFile)
-                obj.neuralChanDispOrder = obj.neuralChansAvailable;
-            else
-                %TODO: Apply channel mapping file to reorder neural channels
-            end
-            
-            obj.sglChanSubset = GetChannelSubset(obj.hSGL); %channel subset as specified in SpikeGLX
-
-            if isequal(obj.sglChanSubset,'all')
-                obj.neuralChanDisplayList = obj.neuralChanDispOrder;
-                obj.auxChanProcList = [obj.analogMuxChansAvailable obj.analogSoloChansAvailable];
-            else                              
-                %TODO: Apply subsetting correctly
-            end           
-            
+            obj.zprvApplyChanOrderAndSubset();
 
             %Reset various state vars -- RMS/mean, filterCondition, spike data, etc
             obj.zprvResetAcquisition();
@@ -2307,7 +2301,7 @@ classdef SpikeGrid < most.Model
         
         function zprvDrawThresholdLines(obj)
             
-            numDispChans = numel(obj.neuralChanDispList);
+            maxNumDispChans = numel(obj.neuralChansAvailable);
             
             %Clear existing threshold lines
             handlesToClear = [obj.hThresholdLines{1}(isgraphics(obj.hThresholdLines{1})); obj.hThresholdLines{2}(isgraphics(obj.hThresholdLines{2}))];
@@ -2318,7 +2312,7 @@ classdef SpikeGrid < most.Model
             perChanThreshold = ~strcmpi(obj.thresholdType,obj.spikeAmpUnits);
             if perChanThreshold %RMS threshold with voltage units -- this is only mismatch type presently allowed
                 if isempty(obj.thresholdRMS)
-                    obj.hThresholdLines = repmat({ones(numDispChans,1) * -1},2,1);
+                    obj.hThresholdLines = repmat({ones(maxNumDispChans,1) * -1},2,1);
                     return; %nothing to draw
                 end
             else %matched units/threshold-type
@@ -2584,6 +2578,25 @@ classdef SpikeGrid < most.Model
                 'A change in the available neural and/or auxiliary channels has been detected. Changes to the SpikeGLX NI channel configuration is not allowed currently. Close & restart Spoke to employ new configuration.');
             
         end
+        
+        function zprvApplyChanOrderAndSubset(obj)
+            
+            if isempty(obj.sglParamCache.snsChanMapFile)
+                obj.neuralChanDispOrder = obj.neuralChansAvailable;
+            else
+                %TODO: Apply channel mapping file to reorder neural channels
+            end
+            
+            obj.sglChanSubset = GetChannelSubset(obj.hSGL); %channel subset as specified in SpikeGLX
+
+            if isequal(obj.sglChanSubset,'all')
+                obj.neuralChanDispList = obj.neuralChanDispOrder;
+                obj.auxChanProcList = [obj.analogMuxChansAvailable obj.analogSoloChansAvailable];
+            else                              
+                %TODO: Apply subsetting correctly
+            end           
+        end
+        
  
     end
     
