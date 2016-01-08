@@ -2555,15 +2555,15 @@ classdef SpikeGrid < most.Model
                        
             %Determine the acquistion channel numbers
             for i=1:length(mn)
-                neural = [neural mn(i)*0:(muxFactor-1)]; %#ok<AGROW>
+                neural = [neural (mn(i)*muxFactor) + (0:(muxFactor-1))]; %#ok<AGROW>
             end
             
             for i=1:length(ma)
-                analogmux = [analogmux ma(i)*0:(muxFactor-1)]; %#ok<AGROW>
+                analogmux = [analogmux (mn(i)*muxFactor) + 0:(muxFactor-1)]; %#ok<AGROW>
             end
             
             for i = 1:length(xa)
-                analogsolo = [analogsolo xa(i)*muxFactor]; %#ok<AGROW>
+                analogsolo = [analogsolo xa(i)*muxFactor + 1]; %#ok<AGROW>
             end
             
             digwords = []; %Not supported (or used, anecdotally) at this time. need to understand line to channel mapping rules.
