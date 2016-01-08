@@ -315,6 +315,7 @@ classdef SpikeGrid < most.Model
             obj.zprvResetSpikeData();
                         
             %Initialize a default display for appearances (though it gets overridden by processing on start())
+            obj.sglChanSubset = GetChannelSubset(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
             obj.zprvApplyChanOrderAndSubset();
 
             maxNumDispChans = numel(obj.neuralChansAvailable);
@@ -1000,7 +1001,7 @@ classdef SpikeGrid < most.Model
             
             %Apply channel ordering & subsetting, if specified in SpikeGLX
             %TODO: Consider to allow further subsetting by Spoke user, to give faster Spoke processing
-            obj.zprvAssertAvailChansConstant();            
+            obj.zprvAssertAvailChansConstant(); 
             obj.zprvApplyChanOrderAndSubset();
 
             %Reset various state vars -- RMS/mean, filterCondition, spike data, etc
@@ -2553,7 +2554,7 @@ classdef SpikeGrid < most.Model
             xa = str2num(obj.sglParamCache.niXAChans1); %#ok<ST2NM>
             dw = str2num(obj.sglParamCache.niXDChans1); %#ok<NASGU,ST2NM>
                        
-            %Determine the acquistion channel numbers
+            %Determine the acquisition channel numbers
             for i=1:length(mn)
                 neural = [neural (mn(i)*muxFactor) + (0:(muxFactor-1))]; %#ok<AGROW>
             end
@@ -2584,9 +2585,7 @@ classdef SpikeGrid < most.Model
                 obj.neuralChanDispOrder = obj.neuralChansAvailable;
             else
                 %TODO: Apply channel mapping file to reorder neural channels
-            end
-            
-            obj.sglChanSubset = GetChannelSubset(obj.hSGL); %channel subset as specified in SpikeGLX
+            end           
 
             if isequal(obj.sglChanSubset,'all')
                 obj.neuralChanDispList = obj.neuralChanDispOrder;
