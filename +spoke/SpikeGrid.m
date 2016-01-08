@@ -995,12 +995,12 @@ classdef SpikeGrid < most.Model
             obj.maxReadableScanNum = 0;
             obj.lastMaxReadableScanNum = 0;
             obj.priorfileMaxReadableScanNum = 0;
-            
+                                               
+            hTimers = obj.hTimer;
             
             %Apply channel ordering & subsetting, if specified in SpikeGLX
             %TODO: Consider to allow further subsetting by Spoke user, to give faster Spoke processing
-            obj.zprvAssertAvailChansConstant();
-            
+            obj.zprvAssertAvailChansConstant();            
             obj.zprvApplyChanOrderAndSubset();
 
             %Reset various state vars -- RMS/mean, filterCondition, spike data, etc
@@ -1885,8 +1885,7 @@ classdef SpikeGrid < most.Model
                 %newRmsData = cell(numDispChans,1);
                 %batchLength = zeros(numDispChans,1);
                 rmsDataIdxs = {1:(size(obj.rawDataBuffer,1)-obj.spikeScanWindow(2))};
-                rmsDataIdxs = rep
-                mat(rmsDataIdxs,numDispChans,1);
+                rmsDataIdxs = repmat(rmsDataIdxs,numDispChans,1);
                 
                 firstPassMode = isempty(newSpikeScanNums); %Handle first pass at RMS detection, when there are no detected spikes yet
                 
