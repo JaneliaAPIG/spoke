@@ -577,7 +577,7 @@ classdef SpikeGrid < most.Model
         
         function set.refreshPeriodMaxNumSpikes(obj,val)
             % force recalc of dependent property
-            obj.refreshPeriodMaxSpikeRate = obj.refreshPeriodMaxSpikeRate;
+            obj.refreshPeriodMaxNumSpikes = val;
         end
         
         function val = get.refreshPeriodAvgScans(obj)
@@ -685,7 +685,7 @@ classdef SpikeGrid < most.Model
         
         function set.spikeAmpWindow(obj,val)
             %force recalc of dependent property
-            obj.spikeAmpWindow = obj.spikeAmpWindow; 
+            obj.spikeAmpWindow = val; 
         end
         
         function set.spikeTimeWindow(obj,val)
