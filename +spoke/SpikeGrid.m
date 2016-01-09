@@ -204,7 +204,7 @@ classdef SpikeGrid < most.Model
         spikeData = {}; %Cell array, one cell per available neural channel, of structures containing data for each detected spike -- scan number, waveform data. For waveform mode, spikeData gets cleared with each set of newly detected spikes.
         spikeCount = []; %Scalar array specifying number of spikes detected per channel since start()
         lastPlottedSpikeCount = []; %Scalar array specifying the spike count, for each channel that's been last plotted
-        
+        lastPlottedSpikeCountSinceClear = []; %Scalar array specificying the spike count, for each channel that's been last plotted (cleared every time a channel is cleared) - only used for 'all' plot clear mode.
         %globalMean; %Global mean value across acquisition channels, computed from all non-spike-window scan from within last thresholdRMSTime, if globalMeanSubtraction=true is nonempty
         
         %thresholdRMSExcludedScans; %Array of numbers, one per channel, indicating number of scans included into RMS calculation, from within last thresholdRMSTime
@@ -238,9 +238,7 @@ classdef SpikeGrid < most.Model
         stimLastEventScanNumWindow; %1x2 array indicating start/end scan numbers for last stimulus trial
         
         stimEventCount_; %Struct var containing stimEventCount value for each of the stimEventTypes_
-        
-        refreshPeriodMaxNumSpikes = inf; %Maximum number of spikes to detect/plot during a given refresh period
-        
+               
         bmarkReadTimeStats = zeros(3,1); %Array of [mean std n]
         bmarkPreProcessTimeStats = zeros(3,1);; %Array of [mean std n]
         bmarkPlotTimeStats = zeros(3,1);; %Array of [mean std n]
@@ -580,7 +578,7 @@ classdef SpikeGrid < most.Model
         end
         
         function set.refreshPeriodMaxNumSpikes(obj,val)
-            obj.refreshPeriodMaxNumSpikes = 
+              %Side Effects
         end
         
         function set.refreshPeriodMaxSpikeRate(obj,val)
@@ -2128,26 +2126,21 @@ classdef SpikeGrid < most.Model
                 spikeScanWindowLength = diff(obj.spikeScanWindow)+1;
                 xData = linspace(obj.spikeTimeWindow(1),obj.spikeTimeWindow(2),spikeScanWindowLength)';
                 
-                newSpikeCounts = obj.lastPlottedSpikeCount(i) + (1:numNewSpikes);
+                newSpikeCounts = obj.lastPlottedSpikeCount(i) + (1:numNewSpikes);                
                 lineIdxs = mod(newSpikeCounts,obj.spikesPerPlot) + 1; %The line object indices to use for these newly detected spikes
 
-                %If all lines have been used for this channel, handle spikesPerPlotClearMode = 'all'
-%                if lineIdxs(j) == obj.spikesPerPlot && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
-%                    obj.hSpikeLines(plotIdx).clearpoints();
-%                end
-
                 % Clear spikes (if necessary)
-                [x,y] = getpoints(obj.hSpikeLines(plotIdx));
-                if (numel(x) + numNewSpikes) > obj.spikesPerPlot
                     switch obj.spikesPerPlotClearMode
                         case 'all'
-                            obj.hSpikeLines(plotIdx).clearpoints();
+                            if obj.lastPlottedSpikeCountSinceClear(i) + numNewSpikes > obj.spikesPerPlot
+                                obj.hSpikeLines(plotIdx).clearpoints();
+                                obj.lastPlottedSpikeCountSinceClear(i) = 0;
+                            end
                         case 'oldest'
                             
                         otherwise
                             disp('invalid plot clear mode');
                     end
-                end
 
                 % Draw new spikes
                 for j=1:numNewSpikes
@@ -2170,10 +2163,15 @@ classdef SpikeGrid < most.Model
                                 waveform = (double(waveform) - obj.thresholdMean(i)) / obj.thresholdRMS(i);
                             end
                     end
-                    
+                %If all lines have been used for this channel, handle spikesPerPlotClearMode = 'all'
+                %if lineIdxs(j) == obj.spikesPerPlot && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
+                %    obj.hSpikeLines(plotIdx).clearpoints();
+                %end 
+                
                     %Update line object with waveform for current spike
                     obj.hSpikeLines(plotIdx).addpoints(xData,waveform);                        
-                    obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;                  
+                    obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;
+                    obj.lastPlottedSpikeCountSinceClear(i) = obj.lastPlottedSpikeCountSinceClear(i) + 1;
                 end
             end
         end
@@ -2295,6 +2293,7 @@ classdef SpikeGrid < most.Model
             
             obj.spikeCount = zeros(numNeuralChans,1);
             obj.lastPlottedSpikeCount = zeros(numNeuralChans,1);
+            obj.lastPlottedSpikeCountSinceClear = zeros(numNeuralChans,1);
             
             obj.spikeData = cell(numNeuralChans,1);
             for i=1:numNeuralChans
