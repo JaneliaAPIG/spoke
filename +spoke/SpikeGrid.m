@@ -2151,21 +2151,17 @@ classdef SpikeGrid < most.Model
                             end
                     end
                     
-                    %If all lines have been used for this channel, handle spikesPerPlotClearMode = 'all'
-                    if lineIdxs(j) == obj.spikesPerPlot && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
-                        obj.hSpikeLines(plotIdx).clearpoints();                                             
-                    end                    
-
-                    %Update line object with waveform for currrent spike
+                    %Update line object with waveform for current spike
                     obj.hSpikeLines(plotIdx).addpoints(xData,waveform);                        
                     obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;                  
                   
                 end
-                
+                %If all lines have been used for this channel, handle spikesPerPlotClearMode = 'all'
+                if lineIdxs(j) == obj.spikesPerPlot && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
+                    obj.hSpikeLines(plotIdx).clearpoints();
+                end
             end
-         
         end
-        
         
         function zprvSetAxesProps(obj,hAx)
             %Axes properties for spoke waveform grid axes
