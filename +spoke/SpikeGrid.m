@@ -239,8 +239,6 @@ classdef SpikeGrid < most.Model
         
         stimEventCount_; %Struct var containing stimEventCount value for each of the stimEventTypes_
         
-        refreshPeriodMaxNumSpikes = inf; %Maximum number of spikes to detect/plot during a given refresh period
-        
         bmarkReadTimeStats = zeros(3,1); %Array of [mean std n]
         bmarkPreProcessTimeStats = zeros(3,1);; %Array of [mean std n]
         bmarkPlotTimeStats = zeros(3,1);; %Array of [mean std n]
