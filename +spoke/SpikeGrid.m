@@ -96,7 +96,7 @@ classdef SpikeGrid < most.Model
         %spikeAmpWindow = [-4000 4000];
         
         spikesPerPlot = 100; %Number of sweeps to display in each grid figure
-        spikesPerPlotClearMode = 'oldest'; %One of {'all' 'oldest'}
+        spikesPerPlotClearMode = 'all'; %One of {'all' 'oldest'}
         spikePlotClearPeriod = inf; % (TODO) Time, in seconds, after which to clear all or oldest spike if no spikes have been received
         
         %Raster/PSTH display properties
@@ -299,7 +299,7 @@ classdef SpikeGrid < most.Model
             
             numPadChans = obj.numChans - obj.numAuxChans;
             obj.hThresholdLines = repmat({ones(numPadChans,1) * -1},2,1);
-            obj.hSpikeLines = cell(numPadChans,1);
+            obj.hSpikeLines = gobjects(numPadChans,1);
             
             obj.spikeAmpWindow = [-aiRangeMax aiRangeMax];
             obj.tabDisplayed = 1;
@@ -2134,11 +2134,12 @@ classdef SpikeGrid < most.Model
                     
                     %If all lines have been used for this channel, handle spikesPerPlotClearMode = 'all'
                     if lineIdxs(j) == obj.spikesPerPlot && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
-                        for k=1:length(obj.hSpikeLines{i})
-                            obj.hSpikeLines{plotIdx}(k).XData = [];
-                            obj.hSpikeLines{plotIdx}(k).YData = [];
-                        end
-                        
+                        obj.hSpikeLines(plotIdx).clearpoints();
+                        %                         for k=1:length(obj.hSpikeLines{i})
+                        %                             obj.hSpikeLines{plotIdx}(k).XData = [];
+                        %                             obj.hSpikeLines{plotIdx}(k).YData = [];
+                        %                         end
+                        %
                         resetPlotCount = resetPlotCount + 1;                        
                     end
                                         
@@ -2149,11 +2150,9 @@ classdef SpikeGrid < most.Model
                         idxs = lineIdxs;
                     end                    
                     
-                    %Update line objects with waveform for currrent spike
-                    obj.hSpikeLines{plotIdx}(idxs(j)).XData = xData;
-                    obj.hSpikeLines{plotIdx}(idxs(j)).YData = waveform;                   
-                    obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;
-                    
+                    %Update line object with waveform for currrent spike
+                    obj.hSpikeLines(plotIdx).addpoints(xData,waveform);                        
+                    obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;                    
                   
                 end
                 
@@ -2357,11 +2356,16 @@ classdef SpikeGrid < most.Model
                         case 'waveform'
                             
                             %Clear out graphics
+                            if all(isgraphics(obj.hSpikeLines))
+                                obj.hSpikeLines.clearpoints();
+                            end
                             %delete(obj.hSpikeLines{j}(isgraphics(obj.hSpikeLines{j})));                                                       
-                            for k=1:length(obj.hSpikeLines{j})
-                                obj.hSpikeLines{j}(k).XData = [];
-                                obj.hSpikeLines{j}(k).YData = [];
-                            end                                
+                            %                             for k=1:length(obj.hSpikeLines{j})
+                            %                                 if isgraphics(obj.hSpikeLines{j}(k))
+                            %                                     obj.hSpikeLines{j}(k).XData = [];
+                            %                                     obj.hSpikeLines{j}(k).YData = [];
+                            %                                 end
+                            %                             end
                             
                             reuseThreshold = isgraphics(obj.hThresholdLines{1}(j)) && reuseThreshold;
                             if reuseThreshold
@@ -2392,13 +2396,9 @@ classdef SpikeGrid < most.Model
                             obj.zprvSetAxesProps(obj.hPSTHs(j));                            
                     end
                     
-                    %preallocate lines for spike lines
-                    obj.hSpikeLines{j} = gobjects(obj.spikesPerPlot,1);
-                    
-                    for k=1:obj.spikesPerPlot
-                        obj.hSpikeLines{j}(k) = line('Parent',obj.hPlots(j),'XData',[], 'YData', []);                        
-                    end
-                    
+                    %preallocate animated lines for spike waveforms
+                    obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','none');
+     
                 end
             end
             
