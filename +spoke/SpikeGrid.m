@@ -503,8 +503,8 @@ classdef SpikeGrid < most.Model
         
         function val = get.numChans(obj)
             %val = obj.hSpoke.n_chan;
-            neuralChans = str2num(obj.sglParamCache.niMNChans1);             %#ok<ST2NM>
-            muxAnalogChans = str2num(obj.sglParamCache.niMAChans1);     %#ok<ST2NM>
+            neuralChans = str2num(char(obj.sglParamCache.niMNChans1));             %#ok<ST2NM>
+            muxAnalogChans = str2num(char(obj.sglParamCache.niMAChans1));     %#ok<ST2NM>
             
             val = obj.sglParamCache.niMuxFactor * (numel(neuralChans) + numel(muxAnalogChans)) + obj.numAuxChans;
         end
