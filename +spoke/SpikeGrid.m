@@ -274,6 +274,8 @@ classdef SpikeGrid < most.Model
         
         gridFigPosition; %Figure position of raster/waveform grid figures (same position for both..only one shown at a time)
         psthFigPosition; %Figure position of PSTH grid figure
+        
+        maxPointsPerAnimatedLine; %Used to set the number of max points per animated line. 
     end
     
     %Constants
@@ -577,10 +579,6 @@ classdef SpikeGrid < most.Model
             val = obj.refreshPeriodMaxSpikeRate / obj.refreshRate;
         end
         
-        function set.refreshPeriodMaxNumSpikes(obj,val)
-              %Side Effects
-        end
-        
         function set.refreshPeriodMaxSpikeRate(obj,val)
             obj.validatePropArg('refreshPeriodMaxSpikeRate',val);
             
@@ -704,6 +702,18 @@ classdef SpikeGrid < most.Model
             obj.spikeTimeWindow = val;
         end
         
+        function val = get.maxPointsPerAnimatedLine(obj)
+           %Calculate MaximumNumPoints
+            
+           if strcmp(obj.spikesPerPlotClearMode,'oldest')
+               spikeSampleRate = obj.sglParamCache.niSampRate;
+               numPointsPerWindow = spikeSampleRate * (obj.spikeTimeWindow(2)-obj.spikeTimeWindow(1));
+               val = ceil(obj.spikesPerPlot * numPointsPerWindow);
+           else
+               val = Inf;
+           end
+        end
+        
         function set.spikesPerPlot(obj,val)
             obj.validatePropArg('spikesPerPlot',val);
             obj.spikesPerPlot = val;
@@ -716,7 +726,9 @@ classdef SpikeGrid < most.Model
             obj.spikesPerPlotClearMode = val;
             
             %side-effects
-            obj.zprvClearPlots('waveform');            
+            %TODO: add check here to reset max points in animatedline when changed to anything but 'oldest'.
+            %TODO: add code to recompute max points on animatedlines when changed to 'oldest'.
+            obj.zprvClearPlots('waveform');
         end
         
         function val = get.spikeRefractoryPeriod(obj)
@@ -2163,10 +2175,6 @@ classdef SpikeGrid < most.Model
                                 waveform = (double(waveform) - obj.thresholdMean(i)) / obj.thresholdRMS(i);
                             end
                     end
-                %If all lines have been used for this channel, handle spikesPerPlotClearMode = 'all'
-                %if lineIdxs(j) == obj.spikesPerPlot && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
-                %    obj.hSpikeLines(plotIdx).clearpoints();
-                %end 
                 
                     %Update line object with waveform for current spike
                     obj.hSpikeLines(plotIdx).addpoints(xData,waveform);                        
@@ -2402,18 +2410,14 @@ classdef SpikeGrid < most.Model
                     end
                     
                     %preallocate animated lines for spike waveforms
-                    obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','none');
-     
+                    %obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','none');
+                    obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',obj.maxPointsPerAnimatedLine,'Marker','.','MarkerSize',3,'LineStyle','none');
                 end
             end
             
             if redrawThresholdLines
                 obj.zprvDrawThresholdLines();
             end
-            
-    
-            
-            
         end
         
         function ylim = zprvStimNumDisplayRange2YLim(obj,val)
@@ -2490,8 +2494,6 @@ classdef SpikeGrid < most.Model
                 %TODO: Apply subsetting correctly
             end           
         end
-        
- 
     end
     
     
