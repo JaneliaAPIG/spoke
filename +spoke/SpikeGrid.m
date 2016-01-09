@@ -579,6 +579,10 @@ classdef SpikeGrid < most.Model
             val = obj.refreshPeriodMaxSpikeRate / obj.refreshRate;
         end
         
+        function set.refreshPeriodMaxNumSpikes(obj,val)
+            obj.refreshPeriodMaxNumSpikes = 
+        end
+        
         function set.refreshPeriodMaxSpikeRate(obj,val)
             obj.validatePropArg('refreshPeriodMaxSpikeRate',val);
             
@@ -2111,8 +2115,6 @@ classdef SpikeGrid < most.Model
             
             %totalClearedSpikes = 0;
             for i=obj.tabChanNumbers
-                
-        
                 if isempty(obj.spikeData{i})
                     continue;
                 end
@@ -2128,9 +2130,27 @@ classdef SpikeGrid < most.Model
                 
                 newSpikeCounts = obj.lastPlottedSpikeCount(i) + (1:numNewSpikes);
                 lineIdxs = mod(newSpikeCounts,obj.spikesPerPlot) + 1; %The line object indices to use for these newly detected spikes
-                
+
+                %If all lines have been used for this channel, handle spikesPerPlotClearMode = 'all'
+%                if lineIdxs(j) == obj.spikesPerPlot && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
+%                    obj.hSpikeLines(plotIdx).clearpoints();
+%                end
+
+                % Clear spikes (if necessary)
+                [x,y] = getpoints(obj.hSpikeLines(plotIdx));
+                if (numel(x) + numNewSpikes) > obj.spikesPerPlot
+                    switch obj.spikesPerPlotClearMode
+                        case 'all'
+                            obj.hSpikeLines(plotIdx).clearpoints();
+                        case 'oldest'
+                            
+                        otherwise
+                            disp('invalid plot clear mode');
+                    end
+                end
+
+                % Draw new spikes
                 for j=1:numNewSpikes
-                    
                     waveform = obj.spikeData{i}.waveforms{j};
                     
                     assert(length(waveform) == length(xData),'Waveform data for chan %d, spike %d not of expected length (%d)\n',i,j,length(xData));
@@ -2154,11 +2174,6 @@ classdef SpikeGrid < most.Model
                     %Update line object with waveform for current spike
                     obj.hSpikeLines(plotIdx).addpoints(xData,waveform);                        
                     obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;                  
-                  
-                end
-                %If all lines have been used for this channel, handle spikesPerPlotClearMode = 'all'
-                if lineIdxs(j) == obj.spikesPerPlot && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
-                    obj.hSpikeLines(plotIdx).clearpoints();
                 end
             end
         end
