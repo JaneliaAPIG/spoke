@@ -354,7 +354,7 @@ function s = lclInitPropBindings()
 
     
   %frequently-adjusted property table bindings
-  s.spikeAmpWindow = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','char'));
+  s.spikeAmpWindow_ = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','char'));
   s.spikeTimeWindow = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','char'));
   s.spikesPerPlot = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','numeric'));
 

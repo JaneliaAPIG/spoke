@@ -93,7 +93,7 @@ classdef SpikeGrid < most.Model
         %Spike waveform display properties
         spikeTimeWindow = [-1 2] * 1e-3; %2 element vector ([pre post]) indicating times, in seconds, to display before and after threshold crossing
         spikeAmpUnits = 'volts'; %One of {'volts' 'rmsMultiple'} indicating units to use for spike plot display. Value of 'rmsMultiple' only available if thresholdType='rmsMultiple'
-        %spikeAmpWindow = [-4000 4000];
+        %spikeAmpWindow_ = [-4000 4000];
         
         spikesPerPlot = 100; %Number of sweeps to display in each grid figure
         spikesPerPlotClearMode = 'all'; %One of {'all' 'oldest'}
@@ -115,7 +115,15 @@ classdef SpikeGrid < most.Model
         psthTimerPeriod = inf; %Period, in seconds, at which plotPSTH() method is called automatically when displayMode='raster'
         
         %channelSubset = inf; %DEPRECATED BY HIDDEN DISPLAYCHANNELS PROP Subset of channels to acquire from
+
+        % The following are properties that were SetAccess=protected, but
+        % have been moved out of protected to allow config file saves with
+        % most.
+        refreshPeriodMaxSpikeRate = inf; %Maximum spike rate (Hz) to detect/plot at each refresh period; spikes above this rate are discarded
         
+        % The following are properties that back up dependent properties.
+        % This is for properties that need to be saved to disk.
+        spikeAmpWindow; % backs up property spikeAmpWindow__  
     end
     
     properties (SetObservable, Transient)
@@ -123,8 +131,9 @@ classdef SpikeGrid < most.Model
     end
     
     properties (SetObservable, Dependent)
-        spikeAmpWindow; %2 element vector ([min max]) indicating voltage bounds or RMSMultiple (depending on thresholdType) for each spike plot
-        refreshPeriodMaxSpikeRate = inf; %Maximum spike rate (Hz) to detect/plot at each refresh period; spikes above this rate are discarded
+        spikeAmpWindow_; %2 element vector ([min max]) indicating voltage bounds or RMSMultiple (depending on thresholdType) for each spike plot
+        refreshPeriodMaxNumSpikes = inf; %Maximum number of spikes to detect/plot during a given refresh period
+        numAuxChans; %Number of auxiliary
     end
     
     properties (Dependent)        
@@ -323,7 +332,7 @@ classdef SpikeGrid < most.Model
             obj.hSpikeLines = gobjects(numNeuralChans,1);
 
             
-            obj.spikeAmpWindow = [-aiRangeMax aiRangeMax];
+            obj.spikeAmpWindow_ = [-aiRangeMax aiRangeMax];
             obj.tabDisplayed = 1;
             
             %Clean-up
@@ -389,7 +398,7 @@ classdef SpikeGrid < most.Model
                 obj.hPanels.psth(i) = uipanel(obj.hFigs.psth,'Position',panelPosn);
                 
                 %Places axes in panel and configure
-                obj.hPlots(i) = axes('Parent',obj.hPanels.waveform(i),'Position',[0 0 1 1],'XLim',obj.spikeTimeWindow); %,'YLim',obj.spikeAmpWindow);
+                obj.hPlots(i) = axes('Parent',obj.hPanels.waveform(i),'Position',[0 0 1 1],'XLim',obj.spikeTimeWindow); %,'YLim',obj.spikeAmpWindow_);
                 obj.hRasters(i) = axes('Parent',obj.hPanels.raster(i),'Position',[0 0 1 1],'XLim',obj.stimTimeWindow);
                 obj.hPSTHs(i) = axes('Parent',obj.hPanels.psth(i),'Position',[0 0 1 1]);
                 
@@ -566,14 +575,15 @@ classdef SpikeGrid < most.Model
             val = ceil(numNeuralChans/obj.PLOTS_PER_TAB);
         end
         
-        function val = get.refreshPeriodMaxSpikeRate(obj)
-            val = obj.refreshPeriodMaxNumSpikes * obj.refreshRate;
+        function val = get.refreshPeriodMaxNumSpikes(obj)
+            val = obj.refreshPeriodMaxSpikeRate / obj.refreshRate;
         end
         
         function set.refreshPeriodMaxSpikeRate(obj,val)
             obj.validatePropArg('refreshPeriodMaxSpikeRate',val);
             
-            obj.refreshPeriodMaxNumSpikes = ceil(val / obj.refreshRate);
+            lclVar = ceil(val / obj.refreshRate);
+            obj.refreshPeriodMaxSpikeRate = lclVar * obj.refreshRate;            
         end
         
         function val = get.refreshPeriodAvgScans(obj)
@@ -641,14 +651,14 @@ classdef SpikeGrid < most.Model
             
             %Side-effects
             if ~strcmpi(oldVal,val)
-                %Adjust thresholdVal & spikeAmpWindow
+                %Adjust thresholdVal & spikeAmpWindow_
                 
                 %TODO(?): A smarter adjustment based on the last-cached RMS values, somehow handlign the variety across channels
                 switch val
                     case 'volts'
-                        obj.spikeAmpWindow = [-1 1] * obj.sglParamCache.niAiRangeMax;
+                        obj.spikeAmpWindow_ = [-1 1] * obj.sglParamCache.niAiRangeMax;
                     case 'rmsMultiple'
-                        obj.spikeAmpWindow = [-2 10] * obj.thresholdVal;
+                        obj.spikeAmpWindow_ = [-2 10] * obj.thresholdVal;
                 end
                 
                 %Refresh threshold lines
@@ -657,12 +667,12 @@ classdef SpikeGrid < most.Model
         end
         
         
-        function val = get.spikeAmpWindow(obj)
+        function val = get.spikeAmpWindow_(obj)
             val = get(obj.hPlots(1),'YLim');
         end
         
-        function set.spikeAmpWindow(obj,val)
-            obj.validatePropArg('spikeAmpWindow',val);
+        function set.spikeAmpWindow_(obj,val)
+            obj.validatePropArg('spikeAmpWindow_',val);
             
             if strcmpi(obj.spikeAmpUnits,'volts');
                 aiRangeMax = obj.sglParamCache.niAiRangeMax;
@@ -675,6 +685,13 @@ classdef SpikeGrid < most.Model
             
             set(obj.hPlots,'YLim',val);
             
+            %Set real property
+            obj.spikeAmpWindow = val;
+        end
+        
+        function set.spikeAmpWindow(obj,val)
+            %force recalc of dependent property
+            obj.spikeAmpWindow = val; 
         end
         
         function set.spikeTimeWindow(obj,val)
@@ -921,17 +938,17 @@ classdef SpikeGrid < most.Model
             %Side Effects
             if ~strcmpi(oldVal,val)
                 
-                %Adjust thresholdVal & spikeAmpWindow
+                %Adjust thresholdVal & spikeAmpWindow_
                 
                 %TODO(?): A smarter adjustment based on the last-cached RMS values, somehow handlign the variety across channels
                 switch val
                     case 'volts'
                         aiRangeMax = obj.sglParamCache.niAiRangeMax;
                         obj.thresholdVal = .1 * aiRangeMax;
-                        obj.spikeAmpWindow = [-1 1] * aiRangeMax;
+                        obj.spikeAmpWindow_ = [-1 1] * aiRangeMax;
                     case 'rmsMultiple'
                         obj.thresholdVal = 5;
-                        obj.spikeAmpWindow = [-2*obj.thresholdVal 10*obj.thresholdVal];
+                        obj.spikeAmpWindow_ = [-2*obj.thresholdVal 10*obj.thresholdVal];
                 end
                 
                 %Redraw threshold lines
@@ -1167,7 +1184,7 @@ classdef SpikeGrid < most.Model
             end
             
             %Save model properties
-            obj.mdlSaveConfig(filename,'include',{'spikeAmpWindow' 'gridFigPosition' 'psthFigPosition'});
+            obj.mdlSaveConfig(filename,'include',{'spikeAmpWindow_' 'gridFigPosition' 'psthFigPosition'});
             
             %Save controller fig layout
             if ~isempty(obj.hController)
@@ -2598,8 +2615,8 @@ s.thresholdRMSRefreshPeriod = struct('Attributes',{{'scalar' 'positive' 'finite'
 s.thresholdRMSRefreshOnRetrigger = struct('Classes','binaryflex','Attributes','scalar');
 
 s.spikeTimeWindow = struct('Attributes',{{'numel' 2 'finite'}});
-%s.spikeAmpWindow = struct('Attributes',{{'finite' '1d'}});
-s.spikeAmpWindow = struct('Attributes',{{'numel' 2 'finite'}});
+%s.spikeAmpWindow_ = struct('Attributes',{{'finite' '1d'}});
+s.spikeAmpWindow_ = struct('Attributes',{{'numel' 2 'finite'}});
 
 s.spikeAmpUnits = struct('Options',{{'volts' 'rmsMultiple'}});
 
