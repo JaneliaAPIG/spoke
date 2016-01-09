@@ -1306,9 +1306,7 @@ classdef SpikeGrid < most.Model
                     obj.maxReadableScanNum = cnt;
                 end
                 
-                %numAcqChans = numel(obj.allAcqChans); %Number of acquired channels: displayed & undisplayed nerual channels, plus auxiliary channels
                 numNeuralChans = numel(obj.neuralChansAvailable);
-                numDispChans = numel(obj.neuralChanDispList); %Number of displayed neural channels
                                 
                 rmsMultipleThresh = strcmpi(obj.thresholdType,'rmsMultiple');
                 rmsMultipleInitializing = rmsMultipleThresh && obj.thresholdRMSLastScan == 0;
@@ -2157,7 +2155,6 @@ classdef SpikeGrid < most.Model
         end
         
         function zprvPlotNewSpikes(obj)
-            numDispChans = length(obj.spikeData);
             
             linesToRedraw = [];
             totalNewSpikes = 0;
@@ -2623,15 +2620,7 @@ function [newSpikeScanNums, maxNumSpikesApplied] = zlclDetectSpikes(spikeData,ra
 % maxNumSpikes: Scalar, indicating max number of spikes to detect per channel (from the start of the rawDataBuffer)
 %
 % NOTES:
-%  VI050812: Not clear that recentSpikeScanNums can ever be non-empty -- might be able to get rid of this logic (and spikeData argument) altogether?
-
-persistent hFig hLine
-
-if isempty(hFig)
-    hFig = figure;
-    hLine = animatedline('MaximumNumPoints',5000);
-end
-                
+%  VI050812: Not clear that recentSpikeScanNums can ever be non-empty -- might be able to get rid of this logic (and spikeData argument) altogether?           
 
 maxNumSpikesApplied = false;
 numNeuralChans = length(spikeData);
