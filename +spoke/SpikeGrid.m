@@ -115,7 +115,15 @@ classdef SpikeGrid < most.Model
         psthTimerPeriod = inf; %Period, in seconds, at which plotPSTH() method is called automatically when displayMode='raster'
         
         channelSubset = inf; %Subset of channels to acquire from
+
+        % The following are properties that were SetAccess=protected, but
+        % have been moved out of protected to allow config file saves with
+        % most.
+        refreshPeriodMaxNumSpikes = inf; %Maximum number of spikes to detect/plot during a given refresh period
         
+        % The following are properties that back up dependent properties.
+        % This is for properties that need to be saved to disk.
+        spikeAmpWindow; % backs up property spikeAmpWindow_        
     end
     
     properties (SetObservable, Transient)
@@ -155,17 +163,7 @@ classdef SpikeGrid < most.Model
     
     properties (Hidden)
         maxBufSizeSeconds = 1;
-
-        % The following are properties that were SetAccess=protected, but
-        % have been moved out of protected to allow config file saves with
-        % most.
-        refreshPeriodMaxNumSpikes = inf; %Maximum number of spikes to detect/plot during a given refresh period
-        
-        % The following are properties that back up dependent properties.
-        % This is for properties that need to be saved to disk.
-        spikeAmpWindow; % backs up property spikeAmpWindow_
     end
-    
     
     properties (Hidden,SetAccess=protected)
         hSGL; %Handle to SpikeGLX object
