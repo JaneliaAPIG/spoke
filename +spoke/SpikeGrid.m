@@ -2426,32 +2426,42 @@ classdef SpikeGrid < most.Model
         function [neural,analogmux,analogsolo,digwords] = zprvGetAvailAcqChans(obj)
             %Determine from teh SpikeGL assignments the set of acquisition
             %channel numbers, for each of the channel type groups
-            
+            %
+            %Current limitations wrt SpikeGLX NI configuration
+            % * Only 1 DAQ device supported                    
+            % * Required that NI configuration satisfies (All MN) < (All MA) < (All MX)
+            %     (In other words, an AUX channel interleaved between 2 banks of neural channels, is not allowed)          
+                      
             muxFactor = obj.sglParamCache.niMuxFactor;
             
             neural = [];
             analogmux = [];
             analogsolo = []; 
+            nextchan = 0;
             
             %Extract the 4 types of chans supported through IMEC phase 2 
-            %At present, only 1 DAQ device supported                    
-            mn = str2num(char(obj.sglParamCache.niMNChans1)); %#ok<ST2NM>
-            ma = str2num(char(obj.sglParamCache.niMAChans1)); %#ok<ST2NM>
-            xa = str2num(char(obj.sglParamCache.niXAChans1)); %#ok<ST2NM>
-            dw = str2num(char(obj.sglParamCache.niXDChans1)); %#ok<NASGU,ST2NM>
+            mn = str2num(num2str(obj.sglParamCache.niMNChans1)); %#ok<ST2NM>
+            ma = str2num(num2str(obj.sglParamCache.niMAChans1)); %#ok<ST2NM>
+            xa = str2num(num2str(obj.sglParamCache.niXAChans1)); %#ok<ST2NM>
+            dw = str2num(num2str(obj.sglParamCache.niXDChans1)); %#ok<NASGU,ST2NM>
                        
             %Determine the acquisition channel numbers
             for i=1:length(mn)
-                neural = [neural (mn(i)*muxFactor) + (0:(muxFactor-1))]; %#ok<AGROW>
+                neural = [neural ((i-1) *muxFactor) + (0:(muxFactor-1))]; %#ok<AGROW>                
+            end
+            nextchan = neural(end) + 1;
+            
+            if ~isempty(ma)
+                for i=1:length(ma)
+                    analogmux = [analogmux nextchan + (i-1)*muxFactor + (0:(muxFactor-1))]; %#ok<AGROW>
+                end
+                nextchan = analogmux(end) + 1;
             end
             
-            for i=1:length(ma)
-                analogmux = [analogmux (mn(i)*muxFactor) + 0:(muxFactor-1)]; %#ok<AGROW>
-            end
             
             for i = 1:length(xa)
-                analogsolo = [analogsolo xa(i)*muxFactor + 1]; %#ok<AGROW>
-            end
+                analogsolo = [analogsolo nextchan + (i-1)]; %#ok<AGROW>
+            end            
             
             digwords = []; %Not supported (or used, anecdotally) at this time. need to understand line to channel mapping rules.
             
