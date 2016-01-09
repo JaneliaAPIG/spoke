@@ -119,7 +119,7 @@ classdef SpikeGrid < most.Model
         % The following are properties that were SetAccess=protected, but
         % have been moved out of protected to allow config file saves with
         % most.
-        refreshPeriodMaxNumSpikes = inf; %Maximum number of spikes to detect/plot during a given refresh period
+        refreshPeriodMaxSpikeRate = inf; %Maximum spike rate (Hz) to detect/plot at each refresh period; spikes above this rate are discarded
         
         % The following are properties that back up dependent properties.
         % This is for properties that need to be saved to disk.
@@ -132,7 +132,7 @@ classdef SpikeGrid < most.Model
     
     properties (SetObservable, Dependent)
         spikeAmpWindow_; %2 element vector ([min max]) indicating voltage bounds or RMSMultiple (depending on thresholdType) for each spike plot
-        refreshPeriodMaxSpikeRate = inf; %Maximum spike rate (Hz) to detect/plot at each refresh period; spikes above this rate are discarded
+        refreshPeriodMaxNumSpikes = inf; %Maximum number of spikes to detect/plot during a given refresh period
         numAuxChans; %Number of auxiliary
     end
     
@@ -565,19 +565,14 @@ classdef SpikeGrid < most.Model
             val = ceil(numPadChans/obj.PLOTS_PER_TAB);
         end
         
-        function val = get.refreshPeriodMaxSpikeRate(obj)
-            val = obj.refreshPeriodMaxNumSpikes * obj.refreshRate;
+        function val = get.refreshPeriodMaxNumSpikes(obj) % DEPENDENT PROPERTY
+            val = obj.refreshPeriodMaxSpikeRate / obj.refreshRate;
         end
         
-        function set.refreshPeriodMaxSpikeRate(obj,val)
+        function set.refreshPeriodMaxSpikeRate(obj,val) % REAL DEAL
             obj.validatePropArg('refreshPeriodMaxSpikeRate',val);
-            
-            obj.refreshPeriodMaxNumSpikes = ceil(val / obj.refreshRate);
-        end
-        
-        function set.refreshPeriodMaxNumSpikes(obj,val)
-            % force recalc of dependent property
-            obj.refreshPeriodMaxNumSpikes = val;
+            lclVar = ceil(val / obj.refreshRate);
+            obj.refreshPeriodMaxSpikeRate = lclVar * obj.refreshRate;            
         end
         
         function val = get.refreshPeriodAvgScans(obj)
