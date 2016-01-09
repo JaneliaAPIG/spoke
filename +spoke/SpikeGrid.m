@@ -96,7 +96,7 @@ classdef SpikeGrid < most.Model
         %spikeAmpWindow = [-4000 4000];
         
         spikesPerPlot = 100; %Number of sweeps to display in each grid figure
-        spikesPerPlotClearMode = 'oldest'; %One of {'all' 'oldest'}
+        spikesPerPlotClearMode = 'all'; %One of {'all' 'oldest'}
         spikePlotClearPeriod = inf; % (TODO) Time, in seconds, after which to clear all or oldest spike if no spikes have been received
         
         %Raster/PSTH display properties
@@ -172,7 +172,7 @@ classdef SpikeGrid < most.Model
         %Handle graphics specific to waveform display
         hPlots; %Array of axes handles, one for each axes in grid
         hThresholdLines; %Cell array of line handles, marking threshold level for each plot in grid
-        hSpikeLines; %Cell array of handles to line objects for each plotted spike waveform
+        hSpikeLines; %Array of animated line objects for each plotted spike waveform
         
         %Handle graphics specific to raster display
         hRasters; %Array of axes handles, one for each axes in grid
@@ -320,7 +320,8 @@ classdef SpikeGrid < most.Model
 
             numNeuralChans = numel(obj.neuralChansAvailable);
             obj.hThresholdLines = repmat({ones(numNeuralChans,1) * -1},2,1);
-            obj.hSpikeLines = cell(numNeuralChans,1);
+            obj.hSpikeLines = gobjects(numNeuralChans,1);
+
             
             obj.spikeAmpWindow = [-aiRangeMax aiRangeMax];
             obj.tabDisplayed = 1;
@@ -1582,46 +1583,6 @@ classdef SpikeGrid < most.Model
             
             return;
             
-            %             function [scansToRead, newData] = znstReadAvailableData(fileStartScan,scansToRead)
-            %                 %Read 'scansToRead' scans from file currently being logged to, beginning at the scan number 'fileStartScan'
-            %
-            %                 %Read all available new data, up to maximum amount
-            %                 assert(scansToRead >= 0);
-            %
-            %                 %         %Detect/handle if acquisition has been restarted
-            %                 %         if scansToRead < 0
-            %                 %           scansToRead = fileMaxReadableScanNum;
-            %                 %
-            %                 %           obj.zprvResetAcquisition();
-            %                 %         end
-            %
-            %
-            %                 %fprintf('TimerFcn entry. Size rawDataBuffer: %s \t Max Readable Scan Num: %d \t new ScansToRead: %d\n',mat2str(size(obj.rawDataBuffer)),fileMaxReadableScanNum,scansToRead);
-            %
-            %                 if scansToRead > obj.maxBufSizeScans %Overflow condition: too much data to read
-            %
-            %                     overage = scansToRead - obj.maxBufSizeScans;
-            %                     fprintf('Reducing scansToRead from %d to max allowable value (%d)\n',scansToRead,obj.maxBufSizeScans)
-            %                     scansToRead = obj.maxBufSizeScans;
-            %
-            %                     if obj.bufScanNumEnd ~= 0 % overflow occurred after the initial start() or zprvResetAcquisition() call
-            %                         warning('Too much unprocessed data has queued up..discarding all but most recent data. Some spikes may have been missed.');
-            %
-            %                         obj.rawDataBuffer = zeros(0,numChansTotal); %Clear carry-over from last timer function execution
-            %                     end
-            %
-            %                     %obj.bufScanNumEnd = obj.maxReadableScanNum - scansToRead; %Will only read last maxBufSizeScans
-            %
-            %                     fileStartScan = fileStartScan + overage;
-            %                 end
-            %
-            %                 if scansToRead > 0
-            %                     newData = GetDAQData(obj.hSGL,fileStartScan,scansToRead);
-            %                     fprintf('Read %d of %d scans directly starting from: %d\n',size(newData,1),scansToRead,fileStartScan);
-            %
-            %                 end
-            %             end
-            
             function bufStartScanNum = znstAugmentRawDataBuffer(scansToRead, newData)
                 assert(ismember(size(obj.rawDataBuffer,1),[0 diff(obj.spikeScanWindow)+1 obj.stimEventClassifyNumScans - 1]),'Expected rawDataBuffer to be empty or exactly equal to size of spike window');
                 
@@ -1629,11 +1590,9 @@ classdef SpikeGrid < most.Model
                 %         else
                 %           obj.bufScanNumEnd = obj.bufScanNumEnd + scansToRead; %End index of augmented rawDataBuffer
                 %         end
-                
-                
+                                          
                 obj.bufScanNumEnd = obj.maxReadableScanNum;
                 bufStartScanNum = obj.bufScanNumEnd - scansToRead - size(obj.rawDataBuffer,1); %Start index of rawDataBuffer (including previously read samples carried over from last timer batch, the last post-window worth not yet processed)
-                
                 
                 obj.rawDataBuffer = [obj.rawDataBuffer; newData];
             end
@@ -1835,10 +1794,8 @@ classdef SpikeGrid < most.Model
                             %fprintf('spikeScanNum: %d maxReadableScanNum: %d preStimTime: %d mostRecentHopefulScan: %d\n',spikeScanNum,obj.maxReadableScanNum, round(obj.stimTimeWindow(1)/sampPeriod),(obj.maxReadableScanNum - round(obj.stimTimeWindow(1)/sampPeriod)));
                             %Do nothing -- spike still has hope of finding associated stimulus
                         end
-                        
-                    end
- 
-                    
+                    end                    
+    
                     tmp1 = tic;
                     %Maintain indices of stored spikes associated with each event, for per-event lookup %TODO: Determine if this speedup is actually apparent/important
                     if taggedNewSpike
@@ -1846,9 +1803,7 @@ classdef SpikeGrid < most.Model
                             obj.spikeData{c}.stimEventTypeStruct.(obj.stimEventTypes_{i}) =  [obj.spikeData{c}.stimEventTypeStruct.(obj.stimEventTypes_{i}) (taggedSpikeIdxsStruct.(obj.stimEventTypes_{i}) - length(spikesToClear))];
                         end
                     end
-                    %           if c==17
-                    %             fprintf('Spike tag storage time for chan 17: %g\n',toc(tmp1));
-                    %           end
+
                     
                     %Clear 'orphan' spikes with no hope of finding associated stimulus
                     tmp1 = tic;
@@ -1860,18 +1815,10 @@ classdef SpikeGrid < most.Model
                         obj.spikeData{c}.stimEventTypes(spikesToClear) = [];
                         
                     end
-                    %           if c==17
-                    %             fprintf('Spike data clearing time for chan 17: %g\n',toc(tmp1));
-                    %           end
-                    
-                    %if c==17 && ~isempty(spikesToClear)
-                    %fprintf('Cleared %d spikes for chan 17\n',length(spikesToClear));
-                    %end
+
                 end
                 
-                %if numNewSpikes
-                %  fprintf('Tagged %d new spikes for chan 17\n',numNewSpikes);
-                %end
+
             end
             
             function znstUpdateRMSAndMean(newSpikeScanNums,bufStartScanNum)
@@ -1903,11 +1850,8 @@ classdef SpikeGrid < most.Model
                         end
                         rmsDataIdxs{i}(badIdxs) = [];
                     end
-                end
-                
-                %fprintf('newRmsData chan 17 - size: %s out of %s\tclass: %s\n',mat2str(size(rmsDataIdxs{17})),mat2str(size(obj.rawDataBuffer)),class(obj.rawDataBuffer));
-                
-                
+                end                
+       
                 % Update mean & RMS computation for each pad channel
                 warnNoData = false;
                 for i=1:numNeuralChans
@@ -1925,7 +1869,6 @@ classdef SpikeGrid < most.Model
                         obj.thresholdMean(i) = 0;
                         obj.thresholdRMS(i) = sqrt(sum(double(obj.rawDataBuffer(rmsDataIdxs{i},i)).^2)/dataLen);
                     else %Use per-channel mean subtraction
-                        %dataDoub = double(newRmsData{i});
                         obj.thresholdMean(i) = sum(double(obj.rawDataBuffer(rmsDataIdxs{i},i)))/dataLen;
                         obj.thresholdRMS(i) = sqrt(sum((double(obj.rawDataBuffer(rmsDataIdxs{i},i)) - obj.thresholdMean(i)).^2)/dataLen);
                     end
@@ -1976,14 +1919,8 @@ classdef SpikeGrid < most.Model
                 threshVal = obj.thresholdVal / obj.voltageScaleFactor; %Convert to AD units
                 threshMean = 0; %Don't do mean subtraction
                 newSpikeScanNums = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,0,obj.refreshPeriodMaxNumSpikes); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
-            end
-            
-            %         n = sum(cellfun(@(x)length(x),newSpikeScanNums));
-            %         if n > 100
-            %           fprintf('Detected %d new spikes, on %d different channels, in buffer of size %d!\n',n,length(find(cellfun(@(x)~isempty(x),newSpikeScanNums))),size(obj.rawDataBuffer,1));
-            %           %fprintf('Spikes were on channels: %s\n',mat2str(find(cellfun(@(x)~isempty(x),newSpikeScanNums))));
-            %         end
-            
+            end            
+
         end
         
         function zprvRefreshRasterGrid(obj,chanNewSpikes)
@@ -2061,10 +1998,7 @@ classdef SpikeGrid < most.Model
                     end
                 end
                 
-                if c==17 && ~plotAllSpikes
-                    fprintf('Plotting %d spikes for chan %d\n',length(plotSpikeIdxs),c);
-                end
-                
+
                 %Number stims by their order within the event type(s) selected
                 if isscalar(eventTypes)
                     stimNumsPlotted = obj.stimNumsPlotted(c).(eventType);
@@ -2156,10 +2090,7 @@ classdef SpikeGrid < most.Model
         
         function zprvPlotNewSpikes(obj)
             
-            linesToRedraw = [];
             totalNewSpikes = 0;
-            totalNewLines = 0;
-            totalReusedLines = 0;
             
             %totalClearedSpikes = 0;
             for i=obj.tabChanNumbers
@@ -2204,70 +2135,18 @@ classdef SpikeGrid < most.Model
                     end
                     
                     %If all lines have been used for this channel, handle spikesPerPlotClearMode = 'all'
-                    if mod(lineIdxs(j)-1,obj.spikesPerPlot) == 0 && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
-                        for k=1:length(obj.hSpikeLines{i})
-                            obj.hSpikeLines{i}(k).XData = [];
-                            obj.hSpikeLines{i}(k).YData = [];
-                        end
-                    end
-                    
-                    obj.hSpikeLines{i}(lineIdxs(j)).XData = xData;
-                    obj.hSpikeLines{i}(lineIdxs(j)).YData = waveform;                   
-                    obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;
-                    
-                    %                     if length(obj.hSpikeLines{i}) < obj.spikesPerPlot %Create new line object
-                    %                         if strcmpi(obj.spikesPerPlotClearMode,'all')
-                    %                             obj.hSpikeLines{i}(j) = line('Parent',obj.hPlots(plotIdx),'XData',xData,'YData',waveform); %,'EraseMode','none');
-                    %                             %set(obj.hSpikeLines{i}(end),'EraseMode','none');
-                    %                         else
-                    %                             obj.hSpikeLines{i}(end+1) = line('Parent',obj.hPlots(plotIdx),'XData',xData,'YData',waveform); %,'EraseMode','normal');
-                    %                         end
-                    %
-                    %                         totalNewLines = totalNewLines + 1;
-                    %
-                    %                     else
-                    %                         switch obj.spikesPerPlotClearMode
-                    %                             case 'all' %Clear all previous lines & draw new spike waveform
-                    %                                 obj.zprvClearPlots('waveform',true);
-                    %                                 obj.hSpikeLines{plotIdx}(end+1) = line('Parent',obj.hPlots(plotIdx),'XData',xData,'YData',waveform); %,'EraseMode','none');
-                    %                                 %set(obj.hSpikeLines{i}(end),'EraseMode','none');
-                    %
-                    %                                 totalNewLines = totalNewLines + 1;
-                    %
-                    %                             case 'oldest' %Reuse existing line object
-                    %                                 obj.hSpikeLines{plotIdx} = [obj.hSpikeLines{plotIdx}(2:end) obj.hSpikeLines{plotIdx}(1)];
-                    %                                 set(obj.hSpikeLines{plotIdx}(end),'YData',waveform);
-                    %
-                    %                                 totalReusedLines = totalReusedLines + 1;
-                    %                         end
-                    %
-                    %                     end
-                    
+                    if lineIdxs(j) == obj.spikesPerPlot && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
+                        obj.hSpikeLines(plotIdx).clearpoints();                                             
+                    end                    
+
+                    %Update line object with waveform for currrent spike
+                    obj.hSpikeLines(plotIdx).addpoints(xData,waveform);                        
+                    obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;                  
+                  
                 end
                 
             end
-            
-            %set(linesToRedraw,'EraseMode','normal');
-            
-            %       if ~isem %       tic;pty(linesToRedraw)
-            %         set(linesToRedraw,'EraseMode','normal');
-            %         %delete(linesToDelete);
-            %         %fprintf('Deleted %d lines\n',length(linesToDelete));
-            %       end
-            %       toc;
-            
-            %drawnow expose update;
-            %fprintf('Plotted %d new spikes with %d new lines and %d reused lines\n',totalNewSpikes,totalNewLines,totalReusedLines);
-            
-            %set(linesToRedraw,'EraseMode','none');
-            
-            %
-            %       for i=1:numDispChans
-            %         if ~isempty(obj.hSpikeLines{i})
-            %           set(obj.hSpikeLines{i},'EraseMode','none');
-            %         end
-            %       end
-            
+         
         end
         
         
@@ -2462,12 +2341,10 @@ classdef SpikeGrid < most.Model
                         case 'waveform'
                             
                             %Clear out graphics
-                            %delete(obj.hSpikeLines{j}(isgraphics(obj.hSpikeLines{j})));                                                       
-                            for k=1:length(obj.hSpikeLines{j})
-                                obj.hSpikeLines{j}(k).XData = [];
-                                obj.hSpikeLines{j}(k).YData = [];
-                            end                                
-                            
+                            if all(isgraphics(obj.hSpikeLines))
+                                obj.hSpikeLines.clearpoints();
+                            end
+                             
                             reuseThreshold = isgraphics(obj.hThresholdLines{1}(j)) && reuseThreshold;
                             if reuseThreshold
                                 threshold = unique(get(obj.hThresholdLines{1}(j),'YData'));
@@ -2497,13 +2374,9 @@ classdef SpikeGrid < most.Model
                             obj.zprvSetAxesProps(obj.hPSTHs(j));                            
                     end
                     
-                    %preallocate lines for spike lines
-                    obj.hSpikeLines{j} = gobjects(obj.spikesPerPlot,1);
-                    
-                    for k=1:obj.spikesPerPlot
-                        obj.hSpikeLines{j}(k) = line('Parent',obj.hPlots(j),'XData',[], 'YData', []);                        
-                    end
-                    
+                    %preallocate animated lines for spike waveforms
+                    obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','none');
+     
                 end
             end
             
