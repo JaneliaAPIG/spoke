@@ -186,6 +186,7 @@ classdef SpikeGrid < most.Model
         %Handle graphics specific to raster display
         hRasters; %Array of axes handles, one for each axes in grid
         hPSTHs; %Array of axes handles, one for each axes in grid        
+        hRasterLines; %Cell array of arrays, one per stimEventType, containing animated line objects for each raster plot in grid
         
         numActiveTabs;
         
@@ -237,9 +238,7 @@ classdef SpikeGrid < most.Model
         stimNumsPlotted; %Structure array, of size numChansTotal and with fields given by stimEventTypeNames, indicating number of stims that have been plotted so far for each event
         stimLastEventScanNumWindow; %1x2 array indicating start/end scan numbers for last stimulus trial
         
-        stimEventCount_; %Struct var containing stimEventCount value for each of the stimEventTypes_
-        
-        refreshPeriodMaxNumSpikes = inf; %Maximum number of spikes to detect/plot during a given refresh period
+        stimEventCount_; %Struct var containing stimEventCount value for each of the stimEventTypes_       
         
         bmarkReadTimeStats = zeros(3,1); %Array of [mean std n]
         bmarkPreProcessTimeStats = zeros(3,1);; %Array of [mean std n]
@@ -323,14 +322,19 @@ classdef SpikeGrid < most.Model
             
             obj.zprvResetSpikeData();
                         
-            %Initialize a default display for appearances (though it gets overridden by processing on start())
+            %Initialize a default display for appearances (some aspects gets overridden by processing on start())
             obj.sglChanSubset = GetChannelSubset(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
             obj.zprvApplyChanOrderAndSubset();
 
             numNeuralChans = numel(obj.neuralChansAvailable);
             obj.hThresholdLines = repmat({ones(numNeuralChans,1) * -1},2,1);
-            obj.hSpikeLines = gobjects(numNeuralChans,1);
 
+            %Allocate spike waveforms & raster plots
+            obj.hSpikeLines = gobjects(numNeuralChans,1);            
+            for i=1:obj.PLOTS_PER_TAB            
+                obj.hSpikeLines(i) = animatedline('Parent',obj.hPlots(i),'MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','none');
+            end
+            obj.zprvInitializeRasterGridLines();
             
             obj.spikeAmpWindow_ = [-aiRangeMax aiRangeMax];
             obj.tabDisplayed = 1;
@@ -827,6 +831,11 @@ classdef SpikeGrid < most.Model
             else
                 obj.stimEventClassifyFcn = val;
             end
+            
+            %Side-effects
+            obj.zprvInitializeRasterGridLines(); %Initialize raster grid animated line objects
+            
+                              
         end
         
         function set.stimNumDisplayRange(obj,val)
@@ -2027,8 +2036,7 @@ classdef SpikeGrid < most.Model
                 
                 %TODO: Remove this when enough testing confirms this never happens
                 haveUntaggedStims = ~isempty(uniqueStimNums) && any(uniqueStimNums == 0);
-                assert(~haveUntaggedStims,'The plotSpikeIdxs identified contain one or more untagged spikes');
-                
+                assert(~haveUntaggedStims,'The plotSpikeIdxs identified contain one or more untagged spikes');                
                 
                 %Determine ordering of stims in relation to previously plotted lines (determine stims that have been plotted, partially or fully before, for determining base count)
                 repeatStims = [];
@@ -2048,7 +2056,8 @@ classdef SpikeGrid < most.Model
                 if isscalar(eventTypes)
                     
                     %Plot line of new stim-associated spikes -- note 1) line can have points spanning more than one stim and 2) may not (typically won't) have all the spikes of a given stim
-                    line('Parent',obj.hRasters(plotCount),'XData',obj.spikeData{c}.stimRelScanNums(plotSpikeIdxs) * sampPeriod,'YData', orderedStims,'Marker','d','MarkerSize',2,'Color',colorOrder(eventColorIdx,:),'LineStyle','none'); %,'EraseMode','none');
+                    %line('Parent',obj.hRasters(plotCount),'XData',obj.spikeData{c}.stimRelScanNums(plotSpikeIdxs) * sampPeriod,'YData', orderedStims,'Marker','d','MarkerSize',2,'Color',colorOrder(eventColorIdx,:),'LineStyle','none'); %,'EraseMode','none');
+                    obj.hRasterLines{1}(plotCount).addpoints(obj.spikeData{c}.stimRelScanNums(plotSpikeIdxs) * sampPeriod, orderedStims);
                     
                 else
                     startIdxs = [1; find(diff(orderedStims))+1];
@@ -2358,9 +2367,7 @@ classdef SpikeGrid < most.Model
                         case 'waveform'
                             
                             %Clear out graphics
-                            if all(isgraphics(obj.hSpikeLines))
-                                obj.hSpikeLines.clearpoints();
-                            end
+                            obj.hSpikeLines(j).cleardata();
                              
                             reuseThreshold = isgraphics(obj.hThresholdLines{1}(j)) && reuseThreshold;
                             if reuseThreshold
@@ -2391,19 +2398,13 @@ classdef SpikeGrid < most.Model
                             obj.zprvSetAxesProps(obj.hPSTHs(j));                            
                     end
                     
-                    %preallocate animated lines for spike waveforms
-                    obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','none');
-     
                 end
             end
             
             if redrawThresholdLines
                 obj.zprvDrawThresholdLines();
             end
-            
-    
-            
-            
+  
         end
         
         function ylim = zprvStimNumDisplayRange2YLim(obj,val)
@@ -2486,12 +2487,26 @@ classdef SpikeGrid < most.Model
             if isequal(obj.sglChanSubset,'all')
                 obj.neuralChanDispList = obj.neuralChanDispOrder;
                 obj.auxChanProcList = [obj.analogMuxChansAvailable obj.analogSoloChansAvailable];
-            else                              
+            else
                 %TODO: Apply subsetting correctly
-            end           
+            end
         end
         
- 
+            function zprvInitializeRasterGridLines(obj)
+                colorOrder = get(0,'DefaultAxesColorOrder');
+                
+                cellfun(@()delete,obj.hRasterLines);
+                for i = 1:numel(obj.stimEventTypes_)
+                    ppt = obj.PLOTS_PER_TAB;
+                    obj.hRasterLines{i} = gobjects(ppt,1);
+                    for j=1:ppt
+                        obj.hRasterLines{i}(j) = animatedline('Parent',obj.hRasters(j),'LineStyle','none','Marker','d','MarkerSize',2,'LineStyle','none','Color',colorOrder(i,:));
+                    end
+                end
+                
+            end
+            
+            
     end
     
     
