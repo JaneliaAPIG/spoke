@@ -83,7 +83,7 @@ classdef SpikeGridController < most.Controller;
     
         
     function val = get.stimEventDisplayAllTypes(obj)            
-      val = iscell(obj.hModel.stimEventTypeDisplayed) && length(obj.hModel.stimEventTypeDisplayed) == length(obj.hModel.stimEventTypes);
+      val = iscell(obj.hModel.stimEventTypesDisplayed) && length(obj.hModel.stimEventTypesDisplayed) == length(obj.hModel.stimEventTypes);
     end
     
   end
@@ -192,16 +192,16 @@ classdef SpikeGridController < most.Controller;
       
     end
     
-    function changeStimEventTypeDisplayed(obj,src)
+    function changeStimEventTypesDisplayed(obj,src)
       
       assert(~isempty(obj.hModel.stimEventClassifyFcn));
       
       idx = get(src,'Value');          
       eventType = obj.stimEventDisplayTypes{idx};
       if strcmpi(eventType,'all')      
-        obj.hModel.stimEventTypeDisplayed = obj.hModel.stimEventTypes;
+        obj.hModel.stimEventTypesDisplayed = obj.hModel.stimEventTypes;
       else
-        obj.hModel.stimEventTypeDisplayed = eventType;
+        obj.hModel.stimEventTypesDisplayed = eventType;
       end
       
       %Update pbStimClassify state
@@ -209,14 +209,14 @@ classdef SpikeGridController < most.Controller;
       
     end
     
-    function changedStimEventTypeDisplayed(obj,~,~)      
+    function changedStimEventTypesDisplayed(obj,~,~)      
       
-      if isempty(obj.hModel.stimEventTypeDisplayed)
+      if isempty(obj.hModel.stimEventTypesDisplayed)
         assert(isempty(obj.hModel.stimEventTypes));
         set(obj.hGUIData.SpikeGrid.pmStimEventTypeDisplayed,'Value',1); %should already be the case, but do it here anyway
       else                
-        [tf,loc] = ismember(obj.hModel.stimEventTypeDisplayed,obj.stimEventDisplayTypes);                        
-        assert(all(tf),'Unexpected value for SpikeGrid ''stimEventTypeDisplayed'' property'); %Not really needed, but done anyway...
+        [tf,loc] = ismember(obj.hModel.stimEventTypesDisplayed,obj.stimEventDisplayTypes);                        
+        assert(all(tf),'Unexpected value for SpikeGrid ''stimEventTypesDisplayed'' property'); %Not really needed, but done anyway...
         
         if isscalar(tf)       
           set(obj.hGUIData.SpikeGrid.pmStimEventTypeDisplayed,'Value',loc);
@@ -344,7 +344,7 @@ function s = lclInitPropBindings()
   s.running = struct('Callback','changedRunning');
   
   s.stimEventClassifyFcn = struct('Callback','changedStimEventClassifyFcn');
-  s.stimEventTypeDisplayed = struct('Callback','changedStimEventTypeDisplayed');
+  s.stimEventTypesDisplayed = struct('Callback','changedStimEventTypesDisplayed');
   
   s.thresholdType = struct('GuiIDs',{{'SpikeGrid','pmThresholdUnits'}});
   s.spikeAmpUnits = struct('GuiIDs',{{'SpikeGrid','pmSpikeDisplayUnits'}});

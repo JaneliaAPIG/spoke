@@ -105,7 +105,7 @@ classdef SpikeGrid < most.Model
         stimTimeWindow = [-1 1]; %2 element vector ([pre post]) indicating times, in seconds, to display before and after stim start threshold crossing in raster/psth plots
         stimNumDisplayRange = [1 inf]; %2 element vector indicating which stim numbers to display, counted from last start/reset. Set second element to Inf to specify all stimuli should be displayed.
         stimNumDisplayRangeInfIncrement = 20; %When stimNumDisplayRange(2)=Inf, specify the increment in which the number of stimuli displayed are incremented by.
-        stimEventTypeDisplayed = {}; %String or string cell array indicating which event type(s) to display raster/PSTH data for.
+        stimEventTypesDisplayed = {}; %String or string cell array indicating which event type(s) to display raster/PSTH data for.
         
         spikeRefractoryPeriod = 2e-3; %Time, in seconds, to prevent detection of spike following previously detected spike. When displayMode='waveform', this value is given by second element of spikeTimeWindow.
         
@@ -138,7 +138,7 @@ classdef SpikeGrid < most.Model
     
     properties (Dependent)        
         numTabs;
-        stimEventCount; %Count of stimuli that have been detected since start/restart/rollover at current stimEventTypeDisplayed (when displayMode='raster')
+        stimEventCount; %Count of stimuli that have been detected since start/restart/rollover at current stimEventTypesDisplayed (when displayMode='raster')
     end
     
     %Following are determined at start of acquisition, via the
@@ -186,6 +186,7 @@ classdef SpikeGrid < most.Model
         %Handle graphics specific to raster display
         hRasters; %Array of axes handles, one for each axes in grid
         hPSTHs; %Array of axes handles, one for each axes in grid        
+        hRasterLines; %Cell array of arrays, one per stimEventType, containing animated line objects for each raster plot in grid
         
         numActiveTabs;
         
@@ -234,7 +235,7 @@ classdef SpikeGrid < most.Model
         stimWindowEndScanNums; %Array of scan numbers marking ending edge of stimulus display events
         stimEventTypeNames = {}; %Cell string array of event type names
         
-        stimNumsPlotted; %Structure array, of size numChansTotal and with fields given by stimEventTypeNames, indicating number of stims that have been plotted so far for each event
+        stimNumsPlotted; %Structure array, of size neuralChansAvailable and with fields given by stimEventTypeNames, indicating number of stims that have been plotted so far for each event
         stimLastEventScanNumWindow; %1x2 array indicating start/end scan numbers for last stimulus trial
         
         stimEventCount_; %Struct var containing stimEventCount value for each of the stimEventTypes_
@@ -323,14 +324,19 @@ classdef SpikeGrid < most.Model
             
             obj.zprvResetSpikeData();
                         
-            %Initialize a default display for appearances (though it gets overridden by processing on start())
+            %Initialize a default display for appearances (some aspects gets overridden by processing on start())
             obj.sglChanSubset = GetChannelSubset(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
             obj.zprvApplyChanOrderAndSubset();
 
             numNeuralChans = numel(obj.neuralChansAvailable);
             obj.hThresholdLines = repmat({ones(numNeuralChans,1) * -1},2,1);
-            obj.hSpikeLines = gobjects(numNeuralChans,1);
 
+            %Allocate spike waveforms & raster plots
+            obj.hSpikeLines = gobjects(numNeuralChans,1);            
+            for i=1:obj.PLOTS_PER_TAB            
+                obj.hSpikeLines(i) = animatedline('Parent',obj.hPlots(i),'MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','none');
+            end
+            obj.zprvInitializeRasterGridLines();
             
             obj.spikeAmpWindow_ = [-aiRangeMax aiRangeMax];
             obj.tabDisplayed = 1;
@@ -435,8 +441,8 @@ classdef SpikeGrid < most.Model
                     disallowRaster = true;
                 end
                 
-                if ~isempty(obj.stimEventTypes) && isempty(obj.stimEventTypeDisplayed)
-                    fprintf(2,'WARNING: A valid stimEventTypeDisplayed value must be specified in order to use spike raster display mode\n');
+                if ~isempty(obj.stimEventTypes) && isempty(obj.stimEventTypesDisplayed)
+                    fprintf(2,'WARNING: A valid stimEventTypesDisplayed value must be specified in order to use spike raster display mode\n');
                     disallowRaster = true;
                 end
                 
@@ -635,7 +641,7 @@ classdef SpikeGrid < most.Model
             if isempty(obj.stimEventTypes)
                 val = obj.stimEventCount_.allstim;
             else
-                val = sum(cellfun(@(eventType)obj.stimEventCount_.(eventType),obj.stimEventTypeDisplayed));
+                val = sum(cellfun(@(eventType)obj.stimEventCount_.(eventType),obj.stimEventTypesDisplayed));
             end
         end
         
@@ -762,14 +768,14 @@ classdef SpikeGrid < most.Model
         %       end
         %     end
         
-        function set.stimEventTypeDisplayed(obj,val)
-            assert(ischar(val) || iscellstr(val),'Value of ''stimEventTypeDisplayed'' must be either a string or string cell array');
+        function set.stimEventTypesDisplayed(obj,val)
+            assert(ischar(val) || iscellstr(val),'Value of ''stimEventTypesDisplayed'' must be either a string or string cell array');
             
             if isempty(obj.stimEventTypes)
-                assert(isempty(val),'Value of ''stimEventTypeDisplayed'' must be empty when ''stimEventTypes'' is empty');
+                assert(isempty(val),'Value of ''stimEventTypesDisplayed'' must be empty when ''stimEventTypes'' is empty');
                 return;
             else
-                assert(~isempty(val),'Valid value of ''stimEventTypeDisplayed'' must be supplied.');
+                assert(~isempty(val),'Valid value of ''stimEventTypesDisplayed'' must be supplied.');
             end
             
             if ~iscell(val)
@@ -778,8 +784,8 @@ classdef SpikeGrid < most.Model
             
             assert(all(ismember(val,obj.stimEventTypes)),'One or more of the specified stim event types not recognized');
             
-            oldVal = obj.stimEventTypeDisplayed;
-            obj.stimEventTypeDisplayed = val;
+            oldVal = obj.stimEventTypesDisplayed;
+            obj.stimEventTypesDisplayed = val;
             
             %Side-effects
             if ~isequal(oldVal,val) && strcmpi(obj.displayMode,'raster')
@@ -812,9 +818,9 @@ classdef SpikeGrid < most.Model
                     end
                     
                     if isempty(obj.stimEventTypes)
-                        obj.stimEventTypeDisplayed = '';
-                    elseif isempty(obj.stimEventTypeDisplayed) || ~all(ismember(obj.stimEventTypeDisplayed,obj.stimEventTypes))
-                        obj.stimEventTypeDisplayed = obj.stimEventTypes{1};
+                        obj.stimEventTypesDisplayed = '';
+                    elseif isempty(obj.stimEventTypesDisplayed) || ~all(ismember(obj.stimEventTypesDisplayed,obj.stimEventTypes))
+                        obj.stimEventTypesDisplayed = obj.stimEventTypes{1};
                     end
                     
                     obj.stimEventCount_ = struct();
@@ -841,6 +847,11 @@ classdef SpikeGrid < most.Model
             else
                 obj.stimEventClassifyFcn = val;
             end
+            
+            %Side-effects
+            obj.zprvInitializeRasterGridLines(); %Initialize raster grid animated line objects
+            
+                              
         end
         
         function set.stimNumDisplayRange(obj,val)
@@ -1082,7 +1093,7 @@ classdef SpikeGrid < most.Model
                         fnames = obj.stimEventTypes;
                     end
                     
-                    for i=1:obj.neuralChansAvailable
+                    for i=1:numel(obj.neuralChansAvailable)
                         for j=1:length(fnames)
                             obj.spikeData{i}.stimEventTypeStruct.(fnames{j}) = [];
                         end
@@ -1229,14 +1240,14 @@ classdef SpikeGrid < most.Model
                 if isempty(obj.stimEventTypes)
                     eventTypes = {'allstim'};
                 else
-                    eventTypes = obj.stimEventTypeDisplayed;
+                    eventTypes = obj.stimEventTypesDisplayed;
                 end
                 
                 if length(eventTypes) < length(obj.stimEventTypes)
                     [tf,colorIdxs] = ismember(eventTypes,obj.stimEventTypes);
                     assert(all(tf));
                 else
-                    colorIdxs = 1:length(obj.stimEventTypes);
+                    colorIdxs = 1:length(eventTypes);
                 end
                 
                 scanPeriod = 1/ obj.sglParamCache.niSampRate;
@@ -1285,7 +1296,7 @@ classdef SpikeGrid < most.Model
         function sortRastergram(obj)
             %Method to sort stimuli displayed in rastergram by stimulus event type
             
-            assert(iscell(obj.stimEventTypeDisplayed) && length(obj.stimEventTypeDisplayed) > 1,'Only possible (or useful) to reorganize rastergram when stimEventTypeDisplayed specifies more than one stimulus event type');
+            assert(iscell(obj.stimEventTypesDisplayed) && length(obj.stimEventTypesDisplayed) > 1,'Only possible (or useful) to reorganize rastergram when stimEventTypesDisplayed specifies more than one stimulus event type');
             
             obj.blockTimer = true;
             
@@ -1523,7 +1534,10 @@ classdef SpikeGrid < most.Model
                 %Detect, record, classify stimulus start, as needed
                 if rasterDisplayMode
                     %oldStimScanNums = obj.stimScanNums;
-                    znstDetectStimulus(bufStartScanNum,changedFileName);
+                    %znstDetectStimulus(bufStartScanNum,changedFileName);
+                    znstDetectStimulus(bufStartScanNum);
+                    
+                    
                     %newStimScanNums = setdiff(obj.stimScanNums,oldStimScanNums);
                     %assert(all(newStimScanNums > bufStartScanNum));
                     
@@ -1532,6 +1546,7 @@ classdef SpikeGrid < most.Model
                     end
                     
                     chanNewSpikes = znstTagSpikes(); %Tag spike data with stimulus/event info, as needed/possible
+
                 end
                 t6 = toc(t0);
                 
@@ -1694,6 +1709,11 @@ classdef SpikeGrid < most.Model
             end
             
             function znstDetectStimulus(bufStartScanNum,changedFileName)
+                
+                %TODO: Remove changedFileName relevant code everywhere
+                if nargin < 2
+                    changedFileName = false; %TEMP HACK
+                end
                 
                 if changedFileName || isempty(obj.stimLastEventScanNumWindow)
                     spikeDataBufStartIdx = 1;
@@ -1972,7 +1992,7 @@ classdef SpikeGrid < most.Model
             if isempty(obj.stimEventTypes)
                 eventTypes = {'allstim'};
             else
-                eventTypes = obj.stimEventTypeDisplayed;
+                eventTypes = obj.stimEventTypesDisplayed;
             end
             
             if isscalar(eventTypes)
@@ -2041,8 +2061,7 @@ classdef SpikeGrid < most.Model
                 
                 %TODO: Remove this when enough testing confirms this never happens
                 haveUntaggedStims = ~isempty(uniqueStimNums) && any(uniqueStimNums == 0);
-                assert(~haveUntaggedStims,'The plotSpikeIdxs identified contain one or more untagged spikes');
-                
+                assert(~haveUntaggedStims,'The plotSpikeIdxs identified contain one or more untagged spikes');                
                 
                 %Determine ordering of stims in relation to previously plotted lines (determine stims that have been plotted, partially or fully before, for determining base count)
                 repeatStims = [];
@@ -2060,10 +2079,12 @@ classdef SpikeGrid < most.Model
                 orderedStims = orderedStims + orderedStimBaseNum;
                 
                 if isscalar(eventTypes)
-                    
-                    %Plot line of new stim-associated spikes -- note 1) line can have points spanning more than one stim and 2) may not (typically won't) have all the spikes of a given stim
-                    line('Parent',obj.hRasters(plotCount),'XData',obj.spikeData{c}.stimRelScanNums(plotSpikeIdxs) * sampPeriod,'YData', orderedStims,'Marker','d','MarkerSize',2,'Color',colorOrder(eventColorIdx,:),'LineStyle','none'); %,'EraseMode','none');
-                    
+                    %Add points to line of new stim-associated spikes --
+                    %note 1) line can have points spanning more than one
+                    %stim and 2) may not (typically won't) have all the
+                    %spikes of a given stim
+                    obj.hRasterLines{1}(plotCount).addpoints(obj.spikeData{c}.stimRelScanNums(plotSpikeIdxs) * sampPeriod, orderedStims);
+
                 else
                     startIdxs = [1; find(diff(orderedStims))+1];
                     endIdxs = [startIdxs(2:end) - 1; length(plotSpikeIdxs)];
@@ -2325,16 +2346,18 @@ classdef SpikeGrid < most.Model
         
         function zprvResetStimNumsPlotted(obj)
             
+            
             obj.stimNumsPlotted = struct(); %Clears existing struct data
             
+            nca = numel(obj.neuralChansAvailable);
             if isempty(obj.stimEventTypes)
-                obj.stimNumsPlotted(obj.numChansTotal).allstim = [];
-            elseif isscalar(obj.stimEventTypeDisplayed)
+                obj.stimNumsPlotted(nca).allstim = [];
+            elseif isscalar(obj.stimEventTypesDisplayed)
                 for i=1:length(obj.stimEventTypes)
-                    obj.stimNumsPlotted(obj.numChansTotal).(obj.stimEventTypes{i}) = [];
+                    obj.stimNumsPlotted(nca).(obj.stimEventTypes{i}) = [];
                 end
             else
-                obj.stimNumsPlotted = cell(obj.numChansTotal,1); %Cell array of empty arrays
+                obj.stimNumsPlotted = cell(nca,1); %Cell array of empty arrays
             end
             
         end
@@ -2368,18 +2391,15 @@ classdef SpikeGrid < most.Model
             redrawThresholdLines = false;
             
             for i=1:length(displaysToClear)
-                for j=1:min(obj.PLOTS_PER_TAB,numel(obj.hThresholdLines{1}))
+                %for j=1:min(obj.PLOTS_PER_TAB,numel(obj.hThresholdLines{1}))
+                for j=1:min(obj.PLOTS_PER_TAB)
                     
                     displayToClear = displaysToClear{i};
                     
                     switch displayToClear
                         case 'waveform'
                             
-                            %Clear out graphics
-                            if all(isgraphics(obj.hSpikeLines))
-                                obj.hSpikeLines.clearpoints();
-                            end
-                             
+                            %Clear out graphics                             
                             reuseThreshold = isgraphics(obj.hThresholdLines{1}(j)) && reuseThreshold;
                             if reuseThreshold
                                 threshold = unique(get(obj.hThresholdLines{1}(j),'YData'));
@@ -2401,7 +2421,9 @@ classdef SpikeGrid < most.Model
                             end
                             
                         case 'raster'
-                            cla(obj.hRasters(j));
+                            for k = 1:length(obj.hRasterLines)
+                                obj.hRasterLines{k}(j).clearpoints();
+                            end
                             obj.zprvSetAxesProps(obj.hRasters(j));
                             
                         case 'psth'
@@ -2409,6 +2431,7 @@ classdef SpikeGrid < most.Model
                             obj.zprvSetAxesProps(obj.hPSTHs(j));                            
                     end
                     
+
                     %preallocate animated lines for spike waveforms
                     %obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','none');
                     obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',obj.maxPointsPerAnimatedLine,'Marker','.','MarkerSize',3,'LineStyle','none');
@@ -2418,6 +2441,7 @@ classdef SpikeGrid < most.Model
             if redrawThresholdLines
                 obj.zprvDrawThresholdLines();
             end
+
         end
         
         function ylim = zprvStimNumDisplayRange2YLim(obj,val)
@@ -2500,10 +2524,27 @@ classdef SpikeGrid < most.Model
             if isequal(obj.sglChanSubset,'all')
                 obj.neuralChanDispList = obj.neuralChanDispOrder;
                 obj.auxChanProcList = [obj.analogMuxChansAvailable obj.analogSoloChansAvailable];
-            else                              
+            else
                 %TODO: Apply subsetting correctly
-            end           
+            end
         end
+        
+        function zprvInitializeRasterGridLines(obj)
+            colorOrder = get(0,'DefaultAxesColorOrder');
+            
+            obj.hRasterLines = {};
+            
+            for i = 1:numel(obj.stimEventTypes_)
+                ppt = obj.PLOTS_PER_TAB;
+                obj.hRasterLines{i} = gobjects(ppt,1);
+                for j=1:ppt
+                    obj.hRasterLines{i}(j) = animatedline('Parent',obj.hRasters(j),'LineStyle','none','Marker','d','MarkerSize',2,'LineStyle','none','Color',colorOrder(i,:));
+                end
+            end
+            
+        end
+        
+
     end
     
     
@@ -2645,7 +2686,7 @@ s.filterWindow = struct('Attributes',{{'nonnegative' 'numel' 2}});
 s.globalMeanSubtraction = struct('Classes','binaryflex','Attributes','scalar');
 
 s.stimStartThreshold = struct('Attributes',{{'finite' 'scalar'}});
-s.stimEventTypeDisplayed = struct();
+s.stimEventTypesDisplayed = struct();
 s.stimTimeWindow = struct('Attributes',{{'numel' 2 'finite'}});
 s.stimNumDisplayRange = struct('Attributes',{{'numel' 2 'nonnegative'}});
 s.stimNumDisplayRangeInfIncrement = struct('Attributes',{{'positive' 'scalar' 'finite'}});
