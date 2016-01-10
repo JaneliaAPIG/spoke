@@ -235,7 +235,7 @@ classdef SpikeGrid < most.Model
         stimWindowEndScanNums; %Array of scan numbers marking ending edge of stimulus display events
         stimEventTypeNames = {}; %Cell string array of event type names
         
-        stimNumsPlotted; %Structure array, of size numChansTotal and with fields given by stimEventTypeNames, indicating number of stims that have been plotted so far for each event
+        stimNumsPlotted; %Structure array, of size neuralChansAvailable and with fields given by stimEventTypeNames, indicating number of stims that have been plotted so far for each event
         stimLastEventScanNumWindow; %1x2 array indicating start/end scan numbers for last stimulus trial
         
         stimEventCount_; %Struct var containing stimEventCount value for each of the stimEventTypes_       
@@ -1077,7 +1077,7 @@ classdef SpikeGrid < most.Model
                         fnames = obj.stimEventTypes;
                     end
                     
-                    for i=1:obj.neuralChansAvailable
+                    for i=1:numel(obj.neuralChansAvailable)
                         for j=1:length(fnames)
                             obj.spikeData{i}.stimEventTypeStruct.(fnames{j}) = [];
                         end
@@ -1518,7 +1518,10 @@ classdef SpikeGrid < most.Model
                 %Detect, record, classify stimulus start, as needed
                 if rasterDisplayMode
                     %oldStimScanNums = obj.stimScanNums;
-                    znstDetectStimulus(bufStartScanNum,changedFileName);
+                    %znstDetectStimulus(bufStartScanNum,changedFileName);
+                    znstDetectStimulus(bufStartScanNum);
+                    
+                    
                     %newStimScanNums = setdiff(obj.stimScanNums,oldStimScanNums);
                     %assert(all(newStimScanNums > bufStartScanNum));
                     
@@ -1689,6 +1692,11 @@ classdef SpikeGrid < most.Model
             end
             
             function znstDetectStimulus(bufStartScanNum,changedFileName)
+                
+                %TODO: Remove changedFileName relevant code everywhere
+                if nargin < 2
+                    changedFileName = false; %TEMP HACK
+                end
                 
                 if changedFileName || isempty(obj.stimLastEventScanNumWindow)
                     spikeDataBufStartIdx = 1;
@@ -2316,16 +2324,18 @@ classdef SpikeGrid < most.Model
         
         function zprvResetStimNumsPlotted(obj)
             
+            
             obj.stimNumsPlotted = struct(); %Clears existing struct data
             
+            nca = numel(obj.neuralChansAvailable);
             if isempty(obj.stimEventTypes)
-                obj.stimNumsPlotted(obj.numChansTotal).allstim = [];
+                obj.stimNumsPlotted(nca).allstim = [];
             elseif isscalar(obj.stimEventTypeDisplayed)
                 for i=1:length(obj.stimEventTypes)
-                    obj.stimNumsPlotted(obj.numChansTotal).(obj.stimEventTypes{i}) = [];
+                    obj.stimNumsPlotted(nca).(obj.stimEventTypes{i}) = [];
                 end
             else
-                obj.stimNumsPlotted = cell(obj.numChansTotal,1); %Cell array of empty arrays
+                obj.stimNumsPlotted = cell(nca,1); %Cell array of empty arrays
             end
             
         end
@@ -2366,9 +2376,7 @@ classdef SpikeGrid < most.Model
                     switch displayToClear
                         case 'waveform'
                             
-                            %Clear out graphics
-                            obj.hSpikeLines(j).cleardata();
-                             
+                            %Clear out graphics                             
                             reuseThreshold = isgraphics(obj.hThresholdLines{1}(j)) && reuseThreshold;
                             if reuseThreshold
                                 threshold = unique(get(obj.hThresholdLines{1}(j),'YData'));
@@ -2495,7 +2503,8 @@ classdef SpikeGrid < most.Model
             function zprvInitializeRasterGridLines(obj)
                 colorOrder = get(0,'DefaultAxesColorOrder');
                 
-                cellfun(@()delete,obj.hRasterLines);
+                obj.hRasterLines = {};
+                
                 for i = 1:numel(obj.stimEventTypes_)
                     ppt = obj.PLOTS_PER_TAB;
                     obj.hRasterLines{i} = gobjects(ppt,1);
