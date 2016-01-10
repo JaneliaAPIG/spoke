@@ -1530,6 +1530,7 @@ classdef SpikeGrid < most.Model
                     end
                     
                     chanNewSpikes = znstTagSpikes(); %Tag spike data with stimulus/event info, as needed/possible
+
                 end
                 t6 = toc(t0);
                 
@@ -2062,11 +2063,17 @@ classdef SpikeGrid < most.Model
                 orderedStims = orderedStims + orderedStimBaseNum;
                 
                 if isscalar(eventTypes)
+                    %obj.spikeData{c}.stimRelScanNums(plotSpikeIdxs) * sampPeriod
+                    %orderedStims
                     
                     %Plot line of new stim-associated spikes -- note 1) line can have points spanning more than one stim and 2) may not (typically won't) have all the spikes of a given stim
                     %line('Parent',obj.hRasters(plotCount),'XData',obj.spikeData{c}.stimRelScanNums(plotSpikeIdxs) * sampPeriod,'YData', orderedStims,'Marker','d','MarkerSize',2,'Color',colorOrder(eventColorIdx,:),'LineStyle','none'); %,'EraseMode','none');
                     obj.hRasterLines{1}(plotCount).addpoints(obj.spikeData{c}.stimRelScanNums(plotSpikeIdxs) * sampPeriod, orderedStims);
+
+% get(obj.hRasterLines{1}(plotCount),'parent')
+% obj.hRasterLines{1}(plotCount).addpoints(linspace(-1,1,10),linspace(0,20,10));
                     
+
                 else
                     startIdxs = [1; find(diff(orderedStims))+1];
                     endIdxs = [startIdxs(2:end) - 1; length(plotSpikeIdxs)];
@@ -2369,7 +2376,8 @@ classdef SpikeGrid < most.Model
             redrawThresholdLines = false;
             
             for i=1:length(displaysToClear)
-                for j=1:min(obj.PLOTS_PER_TAB,numel(obj.hThresholdLines{1}))
+                %for j=1:min(obj.PLOTS_PER_TAB,numel(obj.hThresholdLines{1}))
+                for j=1:min(obj.PLOTS_PER_TAB)
                     
                     displayToClear = displaysToClear{i};
                     
@@ -2398,7 +2406,9 @@ classdef SpikeGrid < most.Model
                             end
                             
                         case 'raster'
-                            cla(obj.hRasters(j));
+                            for k = 1:length(obj.hRasterLines)
+                                obj.hRasterLines{k}(j).clearpoints();
+                            end
                             obj.zprvSetAxesProps(obj.hRasters(j));
                             
                         case 'psth'
