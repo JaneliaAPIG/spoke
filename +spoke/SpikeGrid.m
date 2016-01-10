@@ -205,7 +205,7 @@ classdef SpikeGrid < most.Model
         spikeData = {}; %Cell array, one cell per available neural channel, of structures containing data for each detected spike -- scan number, waveform data. For waveform mode, spikeData gets cleared with each set of newly detected spikes.
         spikeCount = []; %Scalar array specifying number of spikes detected per channel since start()
         lastPlottedSpikeCount = []; %Scalar array specifying the spike count, for each channel that's been last plotted
-        
+        lastPlottedSpikeCountSinceClear = []; %Scalar array specificying the spike count, for each channel that's been last plotted (cleared every time a channel is cleared) - only used for 'all' plot clear mode.
         %globalMean; %Global mean value across acquisition channels, computed from all non-spike-window scan from within last thresholdRMSTime, if globalMeanSubtraction=true is nonempty
         
         %thresholdRMSExcludedScans; %Array of numbers, one per channel, indicating number of scans included into RMS calculation, from within last thresholdRMSTime
@@ -238,8 +238,8 @@ classdef SpikeGrid < most.Model
         stimNumsPlotted; %Structure array, of size neuralChansAvailable and with fields given by stimEventTypeNames, indicating number of stims that have been plotted so far for each event
         stimLastEventScanNumWindow; %1x2 array indicating start/end scan numbers for last stimulus trial
         
-        stimEventCount_; %Struct var containing stimEventCount value for each of the stimEventTypes_       
-        
+        stimEventCount_; %Struct var containing stimEventCount value for each of the stimEventTypes_
+
         bmarkReadTimeStats = zeros(3,1); %Array of [mean std n]
         bmarkPreProcessTimeStats = zeros(3,1);; %Array of [mean std n]
         bmarkPlotTimeStats = zeros(3,1);; %Array of [mean std n]
@@ -275,6 +275,8 @@ classdef SpikeGrid < most.Model
         
         gridFigPosition; %Figure position of raster/waveform grid figures (same position for both..only one shown at a time)
         psthFigPosition; %Figure position of PSTH grid figure
+        
+        maxPointsPerAnimatedLine; %Used to set the number of max points per animated line. 
     end
     
     %Constants
@@ -706,6 +708,18 @@ classdef SpikeGrid < most.Model
             obj.spikeTimeWindow = val;
         end
         
+        function val = get.maxPointsPerAnimatedLine(obj)
+           %Calculate MaximumNumPoints
+            
+           if strcmp(obj.spikesPerPlotClearMode,'oldest')
+               spikeSampleRate = obj.sglParamCache.niSampRate;
+               numPointsPerWindow = spikeSampleRate * (obj.spikeTimeWindow(2)-obj.spikeTimeWindow(1));
+               val = ceil(obj.spikesPerPlot * numPointsPerWindow);
+           else
+               val = Inf;
+           end
+        end
+        
         function set.spikesPerPlot(obj,val)
             obj.validatePropArg('spikesPerPlot',val);
             obj.spikesPerPlot = val;
@@ -718,7 +732,9 @@ classdef SpikeGrid < most.Model
             obj.spikesPerPlotClearMode = val;
             
             %side-effects
-            obj.zprvClearPlots('waveform');            
+            %TODO: add check here to reset max points in animatedline when changed to anything but 'oldest'.
+            %TODO: add code to recompute max points on animatedlines when changed to 'oldest'.
+            obj.zprvClearPlots('waveform');
         end
         
         function val = get.spikeRefractoryPeriod(obj)
@@ -2130,8 +2146,6 @@ classdef SpikeGrid < most.Model
             
             %totalClearedSpikes = 0;
             for i=obj.tabChanNumbers
-                
-        
                 if isempty(obj.spikeData{i})
                     continue;
                 end
@@ -2145,11 +2159,24 @@ classdef SpikeGrid < most.Model
                 spikeScanWindowLength = diff(obj.spikeScanWindow)+1;
                 xData = linspace(obj.spikeTimeWindow(1),obj.spikeTimeWindow(2),spikeScanWindowLength)';
                 
-                newSpikeCounts = obj.lastPlottedSpikeCount(i) + (1:numNewSpikes);
+                newSpikeCounts = obj.lastPlottedSpikeCount(i) + (1:numNewSpikes);                
                 lineIdxs = mod(newSpikeCounts,obj.spikesPerPlot) + 1; %The line object indices to use for these newly detected spikes
-                
+
+                % Clear spikes (if necessary)
+                    switch obj.spikesPerPlotClearMode
+                        case 'all'
+                            if obj.lastPlottedSpikeCountSinceClear(i) + numNewSpikes > obj.spikesPerPlot
+                                obj.hSpikeLines(plotIdx).clearpoints();
+                                obj.lastPlottedSpikeCountSinceClear(i) = 0;
+                            end
+                        case 'oldest'
+                            
+                        otherwise
+                            disp('invalid plot clear mode');
+                    end
+
+                % Draw new spikes
                 for j=1:numNewSpikes
-                    
                     waveform = obj.spikeData{i}.waveforms{j};
                     
                     assert(length(waveform) == length(xData),'Waveform data for chan %d, spike %d not of expected length (%d)\n',i,j,length(xData));
@@ -2169,22 +2196,14 @@ classdef SpikeGrid < most.Model
                                 waveform = (double(waveform) - obj.thresholdMean(i)) / obj.thresholdRMS(i);
                             end
                     end
-                    
-                    %If all lines have been used for this channel, handle spikesPerPlotClearMode = 'all'
-                    if lineIdxs(j) == obj.spikesPerPlot && isequal(obj.spikesPerPlotClearMode,'all') && newSpikeCounts(j) > 0
-                        obj.hSpikeLines(plotIdx).clearpoints();                                             
-                    end                    
-
-                    %Update line object with waveform for currrent spike
-                    obj.hSpikeLines(plotIdx).addpoints(xData,waveform);                        
-                    obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;                  
-                  
-                end
                 
+                    %Update line object with waveform for current spike
+                    obj.hSpikeLines(plotIdx).addpoints(xData,waveform);                        
+                    obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;
+                    obj.lastPlottedSpikeCountSinceClear(i) = obj.lastPlottedSpikeCountSinceClear(i) + 1;
+                end
             end
-         
         end
-        
         
         function zprvSetAxesProps(obj,hAx)
             %Axes properties for spoke waveform grid axes
@@ -2303,6 +2322,7 @@ classdef SpikeGrid < most.Model
             
             obj.spikeCount = zeros(numNeuralChans,1);
             obj.lastPlottedSpikeCount = zeros(numNeuralChans,1);
+            obj.lastPlottedSpikeCountSinceClear = zeros(numNeuralChans,1);
             
             obj.spikeData = cell(numNeuralChans,1);
             for i=1:numNeuralChans
@@ -2411,13 +2431,17 @@ classdef SpikeGrid < most.Model
                             obj.zprvSetAxesProps(obj.hPSTHs(j));                            
                     end
                     
+
+                    %preallocate animated lines for spike waveforms
+                    %obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','none');
+                    obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',obj.maxPointsPerAnimatedLine,'Marker','.','MarkerSize',3,'LineStyle','none');
                 end
             end
             
             if redrawThresholdLines
                 obj.zprvDrawThresholdLines();
             end
-  
+
         end
         
         function ylim = zprvStimNumDisplayRange2YLim(obj,val)
@@ -2505,22 +2529,22 @@ classdef SpikeGrid < most.Model
             end
         end
         
-            function zprvInitializeRasterGridLines(obj)
-                colorOrder = get(0,'DefaultAxesColorOrder');
-                
-                obj.hRasterLines = {};
-                
-                for i = 1:numel(obj.stimEventTypes_)
-                    ppt = obj.PLOTS_PER_TAB;
-                    obj.hRasterLines{i} = gobjects(ppt,1);
-                    for j=1:ppt
-                        obj.hRasterLines{i}(j) = animatedline('Parent',obj.hRasters(j),'LineStyle','none','Marker','d','MarkerSize',2,'LineStyle','none','Color',colorOrder(i,:));
-                    end
+        function zprvInitializeRasterGridLines(obj)
+            colorOrder = get(0,'DefaultAxesColorOrder');
+            
+            obj.hRasterLines = {};
+            
+            for i = 1:numel(obj.stimEventTypes_)
+                ppt = obj.PLOTS_PER_TAB;
+                obj.hRasterLines{i} = gobjects(ppt,1);
+                for j=1:ppt
+                    obj.hRasterLines{i}(j) = animatedline('Parent',obj.hRasters(j),'LineStyle','none','Marker','d','MarkerSize',2,'LineStyle','none','Color',colorOrder(i,:));
                 end
-                
             end
             
-            
+        end
+        
+
     end
     
     
