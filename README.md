@@ -15,7 +15,7 @@ Spoke is developed/maintained by the APIG Lab at HHMI/Janelia Research Campus.
 * MATLAB R2015b & Signal Processing Toolbox
 
 ### Credits
-Vijay Iyer: (HHMI/Janelia Scientific Computing) Initial implementation 
-Bill Karsh: (HHMI/Janelia APIG) MATLAB interface to SpikeGLX
-James Jun: (HHMI/Janelia APIG) Current lead
-Edward Kang: (Contractor) Current lead
+Vijay Iyer: (HHMI/Janelia Scientific Computing) Initial implementation <\br>
+Bill Karsh: (HHMI/Janelia APIG) MATLAB interface to SpikeGLX <\br>
+James Jun: (HHMI/Janelia APIG) Current lead <\br>
+Edward Kang: (Contractor) Current lead <\br>
