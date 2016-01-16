@@ -11,7 +11,7 @@ Spoke is developed/maintained by the APIG Lab at HHMI/Janelia Research Campus.
 ### System Requirements
 
 * Windows: 7, 8.1, 10.
-* SpikeGLX Software
+* SpikeGLX Software (get it [here](http://billkarsh.github.io/SpikeGLX)).
 * MATLAB R2015b & Signal Processing Toolbox
 
 ### Credits
