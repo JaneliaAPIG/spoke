@@ -1,6 +1,10 @@
 function spoke()
 % This is spoke, an interface for acquiring data via SpikeGL
 
+% Fix for freezing of MATLAB when running in hardware OpenGL mode.
+% TODO: Fix Spoke to work with Hardware Rendering!!
+opengl('save','software');
+
 % make the spoke main controller object
 
 if nargin == 0

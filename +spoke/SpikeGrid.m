@@ -318,8 +318,9 @@ classdef SpikeGrid < most.Model
                         
             %Programmatic prop intializations
             aiRangeMax = obj.sglParamCache.niAiRangeMax;
+            niMNGain = obj.sglParamCache.niMNGain;
             
-            obj.voltageScaleFactor = aiRangeMax / 2^(obj.SGL_BITS_PER_SAMPLE - 1);
+            obj.voltageScaleFactor = aiRangeMax / 2^(obj.SGL_BITS_PER_SAMPLE - 1) / niMNGain;
             obj.refreshRate = obj.refreshRate; %apply default value
             
             obj.zprvResetSpikeData();
@@ -334,7 +335,7 @@ classdef SpikeGrid < most.Model
             %Allocate spike waveforms & raster plots
             obj.hSpikeLines = gobjects(numNeuralChans,1);            
             for i=1:obj.PLOTS_PER_TAB            
-                obj.hSpikeLines(i) = animatedline('Parent',obj.hPlots(i),'MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','none');
+                obj.hSpikeLines(i) = animatedline('Parent',obj.hPlots(i),'Color','k','MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','-');
             end
             obj.zprvInitializeRasterGridLines();
             
@@ -2179,7 +2180,7 @@ classdef SpikeGrid < most.Model
                 for j=1:numNewSpikes
                     waveform = obj.spikeData{i}.waveforms{j};
                     
-                    assert(length(waveform) == length(xData),'Waveform data for chan %d, spike %d not of expected length (%d)\n',i,j,length(xData));
+                    assert(length(waveform) == length(xData),'Waveform data for chan %d (%d), spike %d not of expected length (%d)\n',i,length(waveform),j,length(xData));
                     
                     %Scale waveform from A/D units to target units, applying mean subtraction if thresholdType='rmsMultiple'
                     switch obj.spikeAmpUnits
@@ -2196,9 +2197,9 @@ classdef SpikeGrid < most.Model
                                 waveform = (double(waveform) - obj.thresholdMean(i)) / obj.thresholdRMS(i);
                             end
                     end
-                
+                                    
                     %Update line object with waveform for current spike
-                    obj.hSpikeLines(plotIdx).addpoints(xData,waveform);                        
+                    obj.hSpikeLines(plotIdx).addpoints(vertcat(xData, NaN),vertcat(waveform, NaN));                        
                     obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;
                     obj.lastPlottedSpikeCountSinceClear(i) = obj.lastPlottedSpikeCountSinceClear(i) + 1;
                 end
@@ -2434,7 +2435,7 @@ classdef SpikeGrid < most.Model
 
                     %preallocate animated lines for spike waveforms
                     %obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','none');
-                    obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',obj.maxPointsPerAnimatedLine,'Marker','.','MarkerSize',3,'LineStyle','none');
+                    obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',obj.maxPointsPerAnimatedLine,'Marker','.','MarkerSize',3,'LineStyle','-');
                 end
             end
             
@@ -2482,7 +2483,7 @@ classdef SpikeGrid < most.Model
             ma = str2num(num2str(obj.sglParamCache.niMAChans1)); %#ok<ST2NM>
             xa = str2num(num2str(obj.sglParamCache.niXAChans1)); %#ok<ST2NM>
             dw = str2num(num2str(obj.sglParamCache.niXDChans1)); %#ok<NASGU,ST2NM>
-                       
+            
             %Determine the acquisition channel numbers
             for i=1:length(mn)
                 neural = [neural ((i-1) *muxFactor) + (0:(muxFactor-1))]; %#ok<AGROW>                
@@ -2615,10 +2616,10 @@ for i=1:numNeuralChans
             nextSpikeIdx = currIdx + find(diff(abs(rawDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i)) > abs(thresholdVal(i))) == 1,1);
         else
             if thresholdVal >= 0 %Find crossings above threshold level
-                nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
+%                 sprintf('%d, %d, %d, %d, %d, %d\n',i, currIdx,scansToSearch,length(thresholdMean),length(thresholdVal), length(rawDataBuffer))
                 
-      
-            else %Find crossings below threshold level
+                nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
+            else %Find crossings below threshold level                
                 nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
             end
         end
