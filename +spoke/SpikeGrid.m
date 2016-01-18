@@ -92,7 +92,7 @@ classdef SpikeGrid < most.Model
         
         %Spike waveform display properties
         spikeTimeWindow = [-1 2] * 1e-3; %2 element vector ([pre post]) indicating times, in seconds, to display before and after threshold crossing
-        spikeAmpUnits = 'volts'; %One of {'volts' 'rmsMultiple'} indicating units to use for spike plot display. Value of 'rmsMultiple' only available if thresholdType='rmsMultiple'
+        spikeAmpUnits = 'volts'; %One of {'volts' 'microvolts' 'rmsMultiple'} indicating units to use for spike plot display. Value of 'rmsMultiple' only available if thresholdType='rmsMultiple'
         %spikeAmpWindow_ = [-4000 4000];
         
         spikesPerPlot = 100; %Number of sweeps to display in each grid figure
@@ -663,6 +663,7 @@ classdef SpikeGrid < most.Model
                 %TODO(?): A smarter adjustment based on the last-cached RMS values, somehow handlign the variety across channels
                 switch val
                     case 'volts'
+                    case 'microvolts'
                         obj.spikeAmpWindow_ = [-1 1] * obj.sglParamCache.niAiRangeMax;
                     case 'rmsMultiple'
                         obj.spikeAmpWindow_ = [-2 10] * obj.thresholdVal;
@@ -681,13 +682,15 @@ classdef SpikeGrid < most.Model
         function set.spikeAmpWindow_(obj,val)
             obj.validatePropArg('spikeAmpWindow_',val);
             
-            if strcmpi(obj.spikeAmpUnits,'volts');
-                aiRangeMax = obj.sglParamCache.niAiRangeMax;
-                if any(abs(val) > 1.1 * aiRangeMax)
-                    warning('Specified range exceeded input channel voltage range by greater than 10% -- spike amplitude axis limits clamped');
-                    val = min(val,1.1 * aiRangeMax);
-                    val = max(val,-1.1 * aiRangeMax);
-                end
+            switch(obj.spikeAmpUnits)
+                case 'volts'
+                    aiRangeMax = obj.sglParamCache.niAiRangeMax;
+                    if any(abs(val) > 1.1 * aiRangeMax)
+                        warning('Specified range exceeded input channel voltage range by greater than 10% -- spike amplitude axis limits clamped');
+                        val = min(val,1.1 * aiRangeMax);
+                        val = max(val,-1.1 * aiRangeMax);
+                    end
+                otherwise
             end
             
             set(obj.hPlots,'YLim',val);
@@ -970,6 +973,10 @@ classdef SpikeGrid < most.Model
                 switch val
                     case 'volts'
                         aiRangeMax = obj.sglParamCache.niAiRangeMax;
+                        obj.thresholdVal = .1 * aiRangeMax;
+                        obj.spikeAmpWindow_ = [-1 1] * aiRangeMax;
+                    case 'microvolts'
+                        aiRangeMax = obj.sglParamCache.niAiRangeMax / 1e6;
                         obj.thresholdVal = .1 * aiRangeMax;
                         obj.spikeAmpWindow_ = [-1 1] * aiRangeMax;
                     case 'rmsMultiple'
@@ -1927,7 +1934,7 @@ classdef SpikeGrid < most.Model
                 end
                 
                 %Redraw threshold lines, if it can change (only in case of 'mismatched' threshold type and display units)
-                if strcmpi(obj.thresholdType,'rmsMultiple') && strcmpi(obj.spikeAmpUnits,'volts')
+                if (strcmpi(obj.thresholdType,'rmsMultiple') && strcmpi(obj.spikeAmpUnits,'volts')) || (strcmpi(obj.thresholdType,'rmsMultiple') && strcmpi(obj.spikeAmpUnits,'microvolts'))
                     obj.zprvDrawThresholdLines();
                 end
                 
@@ -2185,7 +2192,8 @@ classdef SpikeGrid < most.Model
                     %Scale waveform from A/D units to target units, applying mean subtraction if thresholdType='rmsMultiple'
                     switch obj.spikeAmpUnits
                         case 'volts'
-                            if strcmpi(obj.thresholdType,'volts') %no mean subtraction...just show as is
+                        case 'microvolts'
+                            if strcmpi(obj.thresholdType,'volts') || strcmpi(obj.thresholdType,'microvolts') %no mean subtraction...just show as is
                                 waveform = double(waveform) * obj.voltageScaleFactor;
                             else  %RMS-multiple threshold --> do mean subtraction
                                 waveform = (double(waveform) - obj.thresholdMean(i)) * obj.voltageScaleFactor;
@@ -2620,7 +2628,12 @@ for i=1:numNeuralChans
                 
                 nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
             else %Find crossings below threshold level                
-                nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
+                %nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
+                theRawData = rawDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i);
+                theDiff = diff(theRawData < thresholdVal(i));
+                nextSpikeIdx = currIdx + find(theDiff == 1,1); %Find at most one spike
+
+                %nextSpikeIdx = currIdx + find(diff(( - thresholdMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
             end
         end
         
@@ -2662,7 +2675,7 @@ s.stimStartChannel = struct('Attributes',{{'integer' 'finite' 'nonnegative'}},'A
 s.displayMode = struct('Options',{{'waveform' 'raster'}});
 s.tabDisplayed = struct('Attributes',{{'scalar' 'finite' 'positive' 'integer'}});
 
-s.thresholdType = struct('Options',{{'volts' 'rmsMultiple'}});
+s.thresholdType = struct('Options',{{'volts' 'microvolts' 'rmsMultiple'}});
 s.thresholdVal = struct('Attributes',{{'scalar' 'nonempty' 'finite'}});
 s.thresholdAbsolute = struct('Classes','binaryflex','Attributes','scalar');
 s.thresholdRMSRefreshPeriod = struct('Attributes',{{'scalar' 'positive' 'finite'}});
@@ -2672,7 +2685,7 @@ s.spikeTimeWindow = struct('Attributes',{{'numel' 2 'finite'}});
 %s.spikeAmpWindow_ = struct('Attributes',{{'finite' '1d'}});
 s.spikeAmpWindow_ = struct('Attributes',{{'numel' 2 'finite'}});
 
-s.spikeAmpUnits = struct('Options',{{'volts' 'rmsMultiple'}});
+s.spikeAmpUnits = struct('Options',{{'volts' 'microvolts' 'rmsMultiple'}});
 
 s.gatingThreshold = struct('Attributes',{{'scalar' 'finite'}});
 s.gatingDuration = struct('Attributes',{{'scalar' 'finite'}});

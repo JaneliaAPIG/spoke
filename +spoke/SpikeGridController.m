@@ -309,6 +309,13 @@ classdef SpikeGridController < most.Controller;
           else
             obj.hModel.thresholdVal = obj.hModel.thresholdVal - .001;
           end
+
+        case 'microvolts' %step in microvolts
+          if direction == 1
+            obj.hModel.thresholdVal = obj.hModel.thresholdVal + 1e-6; 
+          else
+            obj.hModel.thresholdVal = obj.hModel.thresholdVal - 1e-6;
+          end
           
         case 'rmsMultiple' %stop in multiple units
           if direction == 1
