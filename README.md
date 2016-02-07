@@ -8,14 +8,18 @@ system developed at HHMI/Janelia Research Campus in the [APIG lab of Tim Harris]
 
 Spoke is developed/maintained by the APIG Lab at HHMI/Janelia Research Campus.
 
-### System Requirements
+## System Requirements
 
 * Windows: 7, 8.1, 10.
 * SpikeGLX Software ([get it here](http://billkarsh.github.io/SpikeGLX)).
 * MATLAB R2015b & Signal Processing Toolbox
 
-### Credits
+## Credits
 * Vijay Iyer: (HHMI/Janelia Scientific Computing) Initial implementation 
 * Bill Karsh: (HHMI/Janelia APIG) MATLAB interface to SpikeGLX
 * James Jun: (HHMI/Janelia APIG) Current lead 
 * Edward Kang: (Contractor) Current lead
+
+## Installation
+
+## Running Spoke
