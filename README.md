@@ -1,4 +1,4 @@
-Spoke
+# ${1:Spoke}
 =========
 
 [Spoke](https://github.com/jamesjun/spoke) is a MATLAB app for live display of neural 
