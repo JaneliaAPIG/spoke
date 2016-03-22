@@ -1,4 +1,4 @@
-function spoke()
+function spoke(ipAddress)
 % This is spoke, an interface for acquiring data via SpikeGL
 
 % Fix for freezing of MATLAB when running in hardware OpenGL mode.
