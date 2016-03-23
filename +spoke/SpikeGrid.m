@@ -1916,7 +1916,7 @@ classdef SpikeGrid < most.Model
                 % Update mean & RMS computation for each pad channel
                 warnNoData = false;
                 %for i=1:numNeuralChans
-                for i=1:(obj.sglChanSubset)
+                for i=1:numel(obj.mnChanSubset)
                     if isempty(rmsDataIdxs{i})
                         if ~warnNoData
                             warning('For at least one channel (%d), no data was available for RMS/mean calculations',i);
