@@ -277,6 +277,8 @@ classdef SpikeGrid < most.Model
         psthFigPosition; %Figure position of PSTH grid figure
         
         maxPointsPerAnimatedLine; %Used to set the number of max points per animated line. 
+        
+        mnChanSubset; %Used to get the number of neural channels (used instead of sglChanSubset, which returns all channels, not just MN chans)
     end
     
     %Constants
@@ -595,6 +597,15 @@ classdef SpikeGrid < most.Model
         
         function val = get.refreshPeriodAvgScans(obj)
             val = round(get(obj.hTimer,'Period') * obj.sglParamCache.niSampRate);
+        end
+        
+        function val = get.mnChanSubset(obj)
+            % obj.sglChanSubset does not discriminate between neural, aux, and other types of channels.
+            % return obj.sglChanSubset's neural chans only. hGrid.sglParamCache.niMNChans1, hGrid.sglParamCache.niMNChans2
+            lclMNChans = str2num(num2str(obj.sglParamCache.niMNChans1));
+            lclChanLim = (max(lclMNChans) + 1) * obj.PLOTS_PER_TAB;
+            %val = obj.sglChanSubset;
+            val = obj.sglChanSubset(obj.sglChanSubset < lclChanLim);
         end
         
         function set.refreshRate(obj,val)
@@ -1652,7 +1663,8 @@ classdef SpikeGrid < most.Model
                 
                 try
 %                     for i=1:numNeuralChans
-                    for i=1:numel(obj.sglChanSubset)
+%                     for i=1:numel(obj.sglChanSubset)
+                     for i=1:numel(obj.mnChanSubset)
                         %TODO: Where appropriate (e.g. most waveform display cases), short-circuit storage if not being displayed
                         
                         numNewSpikes = length(newSpikeScanNums{i});
@@ -1882,7 +1894,8 @@ classdef SpikeGrid < most.Model
                 
                 if ~firstPassMode
                     %for i=1:numNeuralChans
-                    for i=1:numel(obj.sglChanSubset)
+                    %for i=1:numel(obj.sglChanSubset)
+                    for i=1:numel(obj.mnChanSubset)
                         %newRmsData{i} = obj.rawDataBuffer(1:end-obj.spikeScanWindow(2),i);
                         %batchLength(i) = length(newRmsData{i});
                         
@@ -1955,7 +1968,7 @@ classdef SpikeGrid < most.Model
                     threshMean = obj.thresholdMean;
                 end
                 
-                [newSpikeScanNums, obj.maxNumSpikesApplied] = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,threshMean,obj.refreshPeriodMaxNumSpikes,obj.sglChanSubset); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+                [newSpikeScanNums, obj.maxNumSpikesApplied] = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,threshMean,obj.refreshPeriodMaxNumSpikes,obj.mnChanSubset); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
                 
                 %
                 %             if maxNumSpikesApplied && ~obj.maxNumSpikesApplied
@@ -1967,7 +1980,7 @@ classdef SpikeGrid < most.Model
             else
                 threshVal = obj.thresholdVal / obj.voltageScaleFactor; %Convert to AD units
                 threshMean = 0; %Don't do mean subtraction
-                newSpikeScanNums = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,0,obj.refreshPeriodMaxNumSpikes,obl.sglChanSubset); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+                newSpikeScanNums = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,0,obj.refreshPeriodMaxNumSpikes,obl.mnChanSubset); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
             end            
 
         end
@@ -2640,7 +2653,6 @@ for i=1:numel(chanSubset)
         
         %Impose refractory period
         currIdx = nextSpikeIdx + postSpikeNumScans; %Will start with final scan of the post-spike-window...to use as first scan for next diff operation (first element never selected)
-
         
     end
     
