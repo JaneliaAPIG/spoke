@@ -284,7 +284,7 @@ classdef SpikeGrid < most.Model
     %Constants
     properties (Hidden,Constant)
         PLOTS_PER_TAB = 32;
-        MAX_NUM_TABS = 4;
+        MAX_NUM_TABS = 8;
         
         INIT_RMS_THRESHOLD = 10; %Initial rmsMultiple to use when detecting spikes to exclude from initial RMS value determination
         RASTER_DISP_STIM_RANGE_INCREMENT_FRACTION = 0.85; %fraction of stimNumDisplayRangeInfIncrement which must be reached before display range is auto-incremented.
