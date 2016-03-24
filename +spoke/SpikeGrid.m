@@ -2307,7 +2307,7 @@ classdef SpikeGrid < most.Model
                         
             obj.rawDataBuffer = zeros(0,numel(obj.neuralChanDispList) + numel(obj.auxChanProcList));
             
-            if ~fileRollover && strcmpi(obj.thresholdType,'rmsMultiple')
+            if ~fileRollover %&& strcmpi(obj.thresholdType,'rmsMultiple')
                 obj.thresholdRMS = zeros(numNeuralChans,1);
                 obj.thresholdMean = zeros(numNeuralChans,1);
                 obj.thresholdRMSLastScan = 0;
