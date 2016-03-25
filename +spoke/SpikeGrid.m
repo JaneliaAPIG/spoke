@@ -1498,14 +1498,17 @@ classdef SpikeGrid < most.Model
                     %Store only those new spikes that fall within a gating window
                     rawDataBufferStartIdx = 1;
                     spikesToStore = cell(numNeuralChans,1);
-                    
+
                     while any(cellfun(@(x)~isempty(x),newSpikeScanNums)) %Some detected spikes remain on at least one channel
                         if ~isempty(obj.gatedScans) %A gating window has been previously computed
                             
                             rawDataBufferStartIdx = obj.gatedScans(2) + 1; %Subsequent searches now begin after the gating window
                             
                             %for i=1:numNeuralChans
-                                for i=1:numel(obj.sglChanSubset)
+                            for h=1:numel(obj.mnChanSubset)
+                                i = obj.sglChanSubset(h) + 1;
+                                fprintf('i = %d, numNewSpikes = %d, numel(newSpikeScanNums) = %d\n',i,numNewSpikes,numel(newSpikeScanNums));
+
                                 if isempty(newSpikeScanNums{i})
                                     continue;
                                 end
@@ -1665,11 +1668,11 @@ classdef SpikeGrid < most.Model
                 try
 %                     for i=1:numNeuralChans
 %                     for i=1:numel(obj.sglChanSubset)
-                     for i=1:numel(obj.mnChanSubset)
+                     for h=1:numel(obj.mnChanSubset)
+                         i = obj.sglChanSubset(h)+1;
                         %TODO: Where appropriate (e.g. most waveform display cases), short-circuit storage if not being displayed
                         
                         numNewSpikes = length(newSpikeScanNums{i});
-                        
                         %Update spike counts
                         obj.spikeCount(i) = obj.spikeCount(i) + numNewSpikes;
                         
@@ -1702,11 +1705,11 @@ classdef SpikeGrid < most.Model
                                 %Handle case of spikes at very start of spike-plotting
                                 if find(idxWindow < 1) %'early' spike
                                     waveform = zeros(length(idxWindow),1,'int16');
-                                    waveform(idxWindow < 1) = obj.rawDataBuffer(1,i);
-                                    waveform(idxWindow >= 1) = obj.rawDataBuffer(idxWindow >= 1,i);
+                                    waveform(idxWindow < 1) = obj.rawDataBuffer(1,h);
+                                    waveform(idxWindow >= 1) = obj.rawDataBuffer(idxWindow >= 1,h);
                                     obj.spikeData{i}.waveforms{j} = waveform;
                                 else
-                                    obj.spikeData{i}.waveforms{j} = obj.rawDataBuffer(idxWindow,i);
+                                    obj.spikeData{i}.waveforms{j} = obj.rawDataBuffer(idxWindow,h);
                                 end
                                 
                             end
@@ -1811,7 +1814,10 @@ classdef SpikeGrid < most.Model
                 taggedSpikeIdxStructInit = cell2struct(repmat({[]},length(obj.stimEventTypes_),1),obj.stimEventTypes_);
                 
 %                 for c=1:numNeuralChans
-                    for c=1:numel(obj.sglChanSubset)
+                %for b=1:numel(obj.sglChanSubset) % EDKANG
+                for b=1:numel(obj.mnChanSubset)        % EDKANG         
+                    c=obj.sglChanSubset(b); % EDKANG
+                    
                     taggedNewSpike = false;
                     spikesToClear = [];
                     taggedSpikeIdxsStruct = taggedSpikeIdxStructInit;
@@ -1969,7 +1975,7 @@ classdef SpikeGrid < most.Model
                     threshMean = obj.thresholdMean;
                 end
                 
-                [newSpikeScanNums, obj.maxNumSpikesApplied] = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,threshMean,obj.refreshPeriodMaxNumSpikes,obj.mnChanSubset); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+                [newSpikeScanNums, obj.maxNumSpikesApplied] = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,threshMean,obj.refreshPeriodMaxNumSpikes,obj.sglChanSubset,obj.mnChanSubset); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
                 
                 %
                 %             if maxNumSpikesApplied && ~obj.maxNumSpikesApplied
@@ -1981,7 +1987,7 @@ classdef SpikeGrid < most.Model
             else
                 threshVal = obj.thresholdVal / obj.voltsPerBit; %Convert to AD units
                 threshMean = 0; %Don't do mean subtraction
-                newSpikeScanNums = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,0,obj.refreshPeriodMaxNumSpikes,obj.mnChanSubset); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+                newSpikeScanNums = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,0,obj.refreshPeriodMaxNumSpikes,obj.sglChanSubset,obj.mnChanSubset); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
             end            
 
         end
@@ -2161,7 +2167,6 @@ classdef SpikeGrid < most.Model
                 if isempty(obj.spikeData{i})
                     continue;
                 end
-                
                 plotIdx = mod(i-1,obj.PLOTS_PER_TAB) + 1;
 
                 numNewSpikes = length(obj.spikeData{i}.scanNums);
@@ -2210,7 +2215,7 @@ classdef SpikeGrid < most.Model
                     end
                                     
                     %Update line object with waveform for current spike
-                    obj.hSpikeLines(plotIdx).addpoints(vertcat(xData, NaN),vertcat(waveform, NaN));                        
+                    obj.hSpikeLines(plotIdx).addpoints(vertcat(xData, NaN),vertcat(waveform, NaN)); % old
                     obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;
                     obj.lastPlottedSpikeCountSinceClear(i) = obj.lastPlottedSpikeCountSinceClear(i) + 1;
                 end
@@ -2574,7 +2579,7 @@ end
 
 %% LOCAL FUNCTIONS
 
-function [newSpikeScanNums, maxNumSpikesApplied] = zlclDetectSpikes(spikeData,rawDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,thresholdMean,maxNumSpikes,chanSubset)
+function [newSpikeScanNums, maxNumSpikesApplied] = zlclDetectSpikes(spikeData,rawDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,thresholdMean,maxNumSpikes,sglChanSubset,chanSubset)
 %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
 %
 % spikeData: Cell array, one element per channel, containing data for each detected spike (from earlier timer callback period(s))
@@ -2604,7 +2609,8 @@ if isscalar(thresholdMean)
 end
 
 %for i=1:numNeuralChans
-for i=1:numel(chanSubset)
+for h=1:numel(chanSubset)
+    i = sglChanSubset(h)+1;
     %Determine recent (already detected) spike scan numbers to exclude from spike search
     lastSpikeScanNumIdx = find(spikeData{i}.scanNums < bufStartScanNum,1,'last');
     if isempty(lastSpikeScanNumIdx)
@@ -2624,13 +2630,13 @@ for i=1:numel(chanSubset)
         %fprintf('currIdx: %d scansToSearch: %d postSpikeNumScans: %d\n',currIdx,scansToSearch,postSpikeNumScans);
         %Find at most one spike (threshold crossing) in the rawDataBuffer
         if thresholdAbsolute %Find crossings above or below absolute threshold level
-            nextSpikeIdx = currIdx + find(diff(abs(rawDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i)) > abs(thresholdVal(i))) == 1,1);
+            nextSpikeIdx = currIdx + find(diff(abs(rawDataBuffer(currIdx:scansToSearch,h) - thresholdMean(i)) > abs(thresholdVal(i))) == 1,1);
         else
             if thresholdVal >= 0 %Find crossings above threshold level
 %                 sprintf('%d, %d, %d, %d, %d, %d\n',i, currIdx,scansToSearch,length(thresholdMean),length(thresholdVal), length(rawDataBuffer))
-                nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
+                nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,h) - thresholdMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
             else %Find crossings below threshold level                
-                nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,i) - thresholdMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
+                nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,h) - thresholdMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
             end
         end
         
