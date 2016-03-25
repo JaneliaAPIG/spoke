@@ -216,7 +216,8 @@ classdef SpikeGrid < most.Model
         
         gatedScans; %Empty array, if no gating window is active, or 1x2 array specifying [start stop] scan numbers, inclusive during which spikes should be plotted
         
-        voltsPerBit; %Scaling factor between A/D values and voltage
+        voltsPerBitAux; %Scaling factor between A/D values and voltage for Auxiliary Channels
+        voltsPerBitNeural; %Scaling factor between A/D values and voltage for Neural Channels
         
         filterCoefficients = {}; %Cell array of a,b filter coefficients for current filterWindow
         filterCondition; %Maintain 'initial condition' of filter between calls to filter()
@@ -321,9 +322,11 @@ classdef SpikeGrid < most.Model
             %Programmatic prop intializations
             aiRangeMax = obj.sglParamCache.niAiRangeMax;
             niMNGain = obj.sglParamCache.niMNGain;
+            niMAGain = obj.sglParamCache.niMAGain;
             
-            %obj.voltsPerBit = aiRangeMax / 2^(obj.SGL_BITS_PER_SAMPLE - 1) / niMNGain;
-            obj.voltsPerBit = (aiRangeMax / niMNGain) / ( 2^(obj.SGL_BITS_PER_SAMPLE - 1));
+            %obj.voltsPerBitNeural = aiRangeMax / 2^(obj.SGL_BITS_PER_SAMPLE - 1) / niMNGain;
+            obj.voltsPerBitNeural = (aiRangeMax / niMNGain) / ( 2^(obj.SGL_BITS_PER_SAMPLE - 1));
+            obj.voltsPerBitAux = (aiRangeMax / niMAGain) / ( 2^(obj.SGL_BITS_PER_SAMPLE - 1));
             obj.refreshRate = obj.refreshRate; %apply default value
             
             obj.zprvResetSpikeData();
@@ -1741,9 +1744,10 @@ classdef SpikeGrid < most.Model
                 end
                 
                 %Detect & record stimulus start and associated stimulus window
-%                stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,obj.stimStartChannel + 1) > (obj.stimStartThreshold / obj.voltsPerBit)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
-                stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,find(obj.sglChanSubset==obj.stimStartChannel)) > (obj.stimStartThreshold / obj.voltsPerBit)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
-                
+%                stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,obj.stimStartChannel + 1) > (obj.stimStartThreshold / obj.voltsPerBitNeural)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+                stimChanRawDataIdx = find(obj.sglChanSubset==obj.stimStartChannel);
+                stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+                %fprintf('stimChanRawDataIdx: %d min data: %g max data: %g\n', stimChanRawDataIdx, min(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)), max(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)));
                 if ~isempty(stimIdx)
                     
                     newStimScanNum = bufStartScanNum + stimIdx - 1;
@@ -1986,7 +1990,7 @@ classdef SpikeGrid < most.Model
                 %             obj.maxNumSpikesApplied = maxNumSpikesApplied;
                 
             else
-                threshVal = obj.thresholdVal / obj.voltsPerBit; %Convert to AD units
+                threshVal = obj.thresholdVal / obj.voltsPerBitNeural; %Convert to AD units
                 threshMean = 0; %Don't do mean subtraction
                 newSpikeScanNums = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,0,obj.refreshPeriodMaxNumSpikes,obj.sglChanSubset,obj.mnChanSubset); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
             end            
@@ -2203,9 +2207,9 @@ classdef SpikeGrid < most.Model
                     switch obj.spikeAmpUnits
                         case 'volts'
                             if strcmpi(obj.thresholdType,'volts') %no mean subtraction...just show as is
-                                waveform = double(waveform) * obj.voltsPerBit;
+                                waveform = double(waveform) * obj.voltsPerBitNeural;
                             else  %RMS-multiple threshold --> do mean subtraction
-                                waveform = (double(waveform) - obj.thresholdMean(i)) * obj.voltsPerBit;
+                                waveform = (double(waveform) - obj.thresholdMean(i)) * obj.voltsPerBitNeural;
                             end
                         case 'rmsMultiple'
                             if obj.filterWindow(1) > 0
@@ -2274,7 +2278,7 @@ classdef SpikeGrid < most.Model
                 plotIdx = mod(i-1,obj.PLOTS_PER_TAB) + 1;
 
                 if perChanThreshold
-                    threshold = obj.thresholdVal * obj.thresholdRMS(i) * obj.voltsPerBit;
+                    threshold = obj.thresholdVal * obj.thresholdRMS(i) * obj.voltsPerBitNeural;
                 end
                 
                 if ~isempty(threshold)
