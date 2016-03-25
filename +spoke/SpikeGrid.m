@@ -1987,7 +1987,11 @@ classdef SpikeGrid < most.Model
             else
                 threshVal = obj.thresholdVal / obj.voltsPerBit; %Convert to AD units
                 threshMean = 0; %Don't do mean subtraction
+<<<<<<< HEAD
                 newSpikeScanNums = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,0,obj.refreshPeriodMaxNumSpikes,obj.sglChanSubset,obj.mnChanSubset); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+=======
+                newSpikeScanNums = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,threshMean,obj.refreshPeriodMaxNumSpikes,obj.mnChanSubset); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+>>>>>>> 6fe931f55ee7899416bde24959e066a2b59322cf
             end            
 
         end
@@ -2312,7 +2316,7 @@ classdef SpikeGrid < most.Model
                         
             obj.rawDataBuffer = zeros(0,numel(obj.neuralChanDispList) + numel(obj.auxChanProcList));
             
-            if ~fileRollover && strcmpi(obj.thresholdType,'rmsMultiple')
+            if ~fileRollover %&& strcmpi(obj.thresholdType,'rmsMultiple')
                 obj.thresholdRMS = zeros(numNeuralChans,1);
                 obj.thresholdMean = zeros(numNeuralChans,1);
                 obj.thresholdRMSLastScan = 0;
