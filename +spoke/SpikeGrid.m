@@ -1741,7 +1741,8 @@ classdef SpikeGrid < most.Model
                 end
                 
                 %Detect & record stimulus start and associated stimulus window
-                stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,obj.stimStartChannel + 1) > (obj.stimStartThreshold / obj.voltsPerBit)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+%                stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,obj.stimStartChannel + 1) > (obj.stimStartThreshold / obj.voltsPerBit)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+                stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,find(obj.sglChanSubset==obj.stimStartChannel)) > (obj.stimStartThreshold / obj.voltsPerBit)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
                 
                 if ~isempty(stimIdx)
                     
@@ -1816,7 +1817,7 @@ classdef SpikeGrid < most.Model
 %                 for c=1:numNeuralChans
                 %for b=1:numel(obj.sglChanSubset) % EDKANG
                 for b=1:numel(obj.mnChanSubset)        % EDKANG         
-                    c=obj.sglChanSubset(b); % EDKANG
+                    c=obj.sglChanSubset(b) + 1; % EDKANG
                     
                     taggedNewSpike = false;
                     spikesToClear = [];
