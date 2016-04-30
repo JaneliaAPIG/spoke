@@ -314,8 +314,7 @@ classdef SpikeGrid < most.Model
             
             obj.hTimer = timer('Name','Spoke Waveform Grid Timer','ExecutionMode','fixedRate','TimerFcn',@obj.zcbkTimerFcn,'BusyMode','queue','StartDelay',0.1);
             obj.hPSTHTimer = timer('Name','Spoke Plot PSTH Timer','ExecutionMode','fixedRate','TimerFcn',@(src,evnt)obj.plotPSTH,'BusyMode','drop','StartDelay',0.1);
-            
-            
+                        
             %Immutable prop initializations            
             [obj.neuralChansAvailable, obj.analogMuxChansAvailable, obj.analogSoloChansAvailable] = obj.zprvGetAvailAcqChans();
                         
@@ -332,7 +331,8 @@ classdef SpikeGrid < most.Model
             obj.zprvResetSpikeData();
                         
             %Initialize a default display for appearances (some aspects gets overridden by processing on start())
-            obj.sglChanSubset = GetChannelSubset(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
+%             obj.sglChanSubset = GetChannelSubset(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
+             obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
             obj.zprvApplyChanOrderAndSubset();
 
             numNeuralChans = numel(obj.neuralChansAvailable);
@@ -364,7 +364,10 @@ classdef SpikeGrid < most.Model
         
         function delete(obj)
             
-            delete(obj.hFigs); %Why doesn't this happen automatically?
+            %delete(obj.hFigs); %Why doesn't this happen automatically?
+            % Can't do the above because Matlab won't let you delete handle struct.
+            
+            obj.quit();
         end
         
     end
@@ -1335,8 +1338,32 @@ classdef SpikeGrid < most.Model
             
             
         end
-        
+
+        function quit(obj)
+            % Delete timer objects.
+            if isvalid(obj.hTimer)
+            stop(obj.hTimer)
+            delete(obj.hTimer)
+            end
+            
+            if isvalid(obj.hPSTHTimer)
+            stop(obj.hPSTHTimer)
+            delete(obj.hPSTHTimer)
+            end
+
+            % Delete figures.
+            delete(obj.hFigs.waveform)
+            delete(obj.hFigs.raster)
+            delete(obj.hFigs.psth)
+            delete(obj.hPanels.waveform)
+            delete(obj.hPanels.raster)
+            delete(obj.hPanels.psth)
+%            delete(obj.hPlots)
+       %     delete(obj.hRasters)
+          %  delete(obj.hPSTHs)
+        end
     end
+    
     
     
     
@@ -1353,7 +1380,9 @@ classdef SpikeGrid < most.Model
 
                 t0 = tic;
                 
-                cnt = GetScanCount(obj.hSGL);
+               % cnt = GetScanCount(obj.hSGL);
+
+                 cnt = GetScanCountNi(obj.hSGL);
                 
                 %Use current scan number as reference scan number on first timer entry following start/restart
                 if ismember(obj.bufScanNumEnd,[0 -1])
@@ -1447,7 +1476,8 @@ classdef SpikeGrid < most.Model
                 
                 %Read newly available data
                 %[scansToRead, newData] = znstReadAvailableData(obj.maxReadableScanNum-obj.priorfileMaxReadableScanNum-scansToRead,scansToRead); %obj.bufScanNumEnd will be 0 in case of file-rollover or SpikeGL stop/restart
-                newData = GetDAQData(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglChanSubset);               
+%                 newData = GetDAQData(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglChanSubset);               
+                 newData = FetchNi(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglChanSubset);               
                 obj.lastMaxReadableScanNum = obj.lastMaxReadableScanNum + scansToRead;
                 t1 = toc(t0);
                 
@@ -2539,7 +2569,7 @@ classdef SpikeGrid < most.Model
         
         function zprvApplyChanOrderAndSubset(obj)
             
-            if isempty(obj.sglParamCache.snsChanMapFile)
+            if isempty(obj.sglParamCache.snsNiChanMapFile)
                 obj.neuralChanDispOrder = obj.neuralChansAvailable;
             else
                 %TODO: Apply channel mapping file to reorder neural channels
