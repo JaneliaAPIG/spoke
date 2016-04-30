@@ -231,6 +231,46 @@ function tbTab4_Callback(hObject, eventdata, handles)
 handles.hController.changeTabDisplayed(4);
 
 
+% --- Executes on button press in tbTab4.
+function tbTab5_Callback(hObject, eventdata, handles)
+% hObject    handle to tbTab4 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of tbTab4
+handles.hController.changeTabDisplayed(5);
+
+
+% --- Executes on button press in tbTab4.
+function tbTab6_Callback(hObject, eventdata, handles)
+% hObject    handle to tbTab4 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of tbTab4
+handles.hController.changeTabDisplayed(6);
+
+
+% --- Executes on button press in tbTab4.
+function tbTab7_Callback(hObject, eventdata, handles)
+% hObject    handle to tbTab4 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of tbTab4
+handles.hController.changeTabDisplayed(7);
+
+
+% --- Executes on button press in tbTab4.
+function tbTab8_Callback(hObject, eventdata, handles)
+% hObject    handle to tbTab4 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of tbTab4
+handles.hController.changeTabDisplayed(8);
+
+
 % --- Executes on button press in tbShowAllProps.
 function tbShowAllProps_Callback(hObject, eventdata, handles)
 % hObject    handle to tbShowAllProps (see GCBO)
