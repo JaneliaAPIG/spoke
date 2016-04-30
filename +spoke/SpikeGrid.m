@@ -1527,6 +1527,9 @@ classdef SpikeGrid < most.Model
                     znstStoreNewSpikes(newSpikeScanNums,bufStartScanNum);
                     
                 else %gating
+                    %Gating feature implementation below has not been
+                    %tested since Spoke beta in 2011/12. By inspection, it
+                    %appears it may work as-is, or close-to.
                     
                     %Store only those new spikes that fall within a gating window
                     rawDataBufferStartIdx = 1;
