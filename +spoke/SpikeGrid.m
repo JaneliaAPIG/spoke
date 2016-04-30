@@ -1,68 +1,6 @@
 classdef SpikeGrid < most.Model
     %SPIKEGRID Summary of this class goes here
-    %
-    %% NOTES
-    %  Timer function collects all available new data and detects spikes
-    %  within the new batch of data, excluding the final post-pulse interval,
-    %  and imposing a 'refractory' period after each spike also equal to the
-    %  plot width post-pulse interval (i.e. no 'colliding' spikes can be detected)
-    %
-    %  At each timer period, the final pre+post pulse interval is retained
-    %  and kept for the subsequent timer period. This ensures there is full
-    %  pre-pulse data for any spikes detected early in the next timer
-    %  period's batch.
-    %
-    %  The spike scan numbers from previous batch are available in the spike
-    %  detection function to prevent duplicate spike detection, i.e. in the
-    %  case that a spike in occurred in the final pre-pulse period of the
-    %  previous buffer, which gets re-checked in the next timer period.
-    %
-    %  The 'gating channel' implementation relies on gatedScans
-    %  property/state. Whenever a gating event is detected this state is
-    %  non-empty. New data is processed until this gate is traversed and then
-    %  the gating state is cleared. No new spikes are stored and gating
-    %  detection is resumed. When a new gating event is detected, spikes are
-    %  again stored for plotting. Note that gatedScans can cross
-    %  refreshPeriod chunks; the scans marked at a previous chunk will be
-    %  stored (if spikes are found) in any subsequent chunks.
-    %
-    %  Mean subtraction is supported in a few different senses. First, there
-    %  is the 'global mean subtraction' option which takes the mean value
-    %  across all channels from the last refresh period and subtracts it from
-    %  all channels. This is meant to remove any global offsets, but may be
-    %  sensitive to spiking activity on various channels. There is also 'per
-    %  channel' mean subtraction in two ways. First, if highpass filtering is
-    %  enabled, then mean subtraction occurs ipso facto. Second, if the
-    %  'rmsMultiple' option is used for /either/ the thresholdType or the
-    %  spikeAmpUnits, then mean subtraction is done explicitly or implicitly.
-    %
-    %  Spike rastergram display is supported, as an orthogonal mode to spike
-    %  waveform display (displayMode property). In this mode, spike timing is
-    %  displayed relative to an auxiliary stimulus channel.
-    %
-    %  For spike rastergram, at present, a single line object is used for
-    %  each channel. Data for the display is refreshed at each timer interval
-    %  when new spikes are available, i.e. when raster data is augmented.
-    %  Tests showed that using data linking was faster (can't remember how
-    %  much!) than replotting from scratch each time, so this is used. It was
-    %  felt that a single line would work, because only a limited number of
-    %  stimuli were expected to be plotted (at a time). However, if # of stimuli grow
-    %  very large, and all are to be displayed, we may need to revisit this.
-    %
-    % Stimulus Classification
-    %   Stimulus events can be classified into event types, so that
-    %   rastergram/PSTH displays show only or otherwise identify spikes
-    %   associated with stimuli of particular event type. To use stimulus
-    %   event classification, user must supply a function
-    %   (stimEventClassifyFcn). This function accepts 1 input argument, which
-    %   is supplied data acquired on the stimEventClassifyChannel for several
-    %   samples (scans) immediately following stimulus detection (on the
-    %   stimStartChannel). Function must also handle case of 0 input
-    %   arguments. In this case, function returns a structure providing
-    %   information about the stimulus event classification, e.g. the
-    %   eventTypeNames. See stimEventClassifyFcn_model for example usage and
-    %   further details.
-    %
+   
     
     
     %% PUBLIC PROPERTIES
