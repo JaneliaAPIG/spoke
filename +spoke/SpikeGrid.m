@@ -1337,8 +1337,8 @@ classdef SpikeGrid < most.Model
                 rmsMultipleThresh = strcmpi(obj.thresholdType,'rmsMultiple');
                 rmsMultipleInitializing = rmsMultipleThresh && obj.thresholdRMSLastScan == 0;
                 rasterDisplayMode = strcmpi(obj.displayMode,'raster');
-                stimulusTriggeredWaveformMode = strcmpi(obj.displayMode,'waveform') && strcmpi(obj.triggerMode,'stimulus');
-				detectionMode = strcmpi(obj.detectionMode,'spike');    % Independently select spike detection.
+				stimulusMode = ~isempty(obj.stimStartChannel) && ~isempty(obj.stimStartThreshold)
+                stimulusTriggeredWaveformMode = strcmpi(obj.displayMode,'waveform') && stimulusMode
 				
                 sampRate = obj.sglParamCache.niSampRate;
                 sampPeriod = 1 / sampRate;
@@ -1535,7 +1535,7 @@ classdef SpikeGrid < most.Model
 				t5 = toc(t0);
 				
                 %Detect, record, classify stimulus start, as needed
-                if rasterDisplayMode
+                if rasterDisplayMode || stimulusTriggeredWaveformMode
                     %oldStimScanNums = obj.stimScanNums;
                     %znstDetectStimulus(bufStartScanNum,changedFileName);
                     znstDetectStimulus(bufStartScanNum);
@@ -1549,7 +1549,6 @@ classdef SpikeGrid < most.Model
                     end
                     
                     chanNewSpikes = znstTagSpikes(); %Tag spike data with stimulus/event info, as needed/possible
-
                 end
                 t6 = toc(t0);
                 
@@ -2662,8 +2661,6 @@ s.gatingChannel = struct('Attributes',{{'integer' 'finite' 'nonnegative'}},'Allo
 s.stimStartChannel = struct('Attributes',{{'integer' 'finite' 'nonnegative'}},'AllowEmpty',1);
 
 s.displayMode   = struct('Options',{{'waveform' 'raster'}});
-s.triggerMode   = struct('Options',{{'stimulus' 'none'}});
-s.detectionMode = struct('Options',{{'spike' 'none'}});
 s.tabDisplayed  = struct('Attributes',{{'scalar' 'finite' 'positive' 'integer'}});
 
 s.thresholdType = struct('Options',{{'volts' 'rmsMultiple'}});
