@@ -106,7 +106,6 @@ classdef SpikeGrid < most.Model
     properties (Hidden,SetAccess=protected)
         hSGL; %Handle to SpikeGLX object
         sglParamCache; %cached SpikeGLX parameters
-        sglChanSubset; %subset of SpikeGLX channels 
         
         hTimer; %Timer to use for periodically checking Spoke's input data stream
         hPSTHTimer; %Timer to periodically call plotPSTH() method
@@ -217,6 +216,8 @@ classdef SpikeGrid < most.Model
         
         maxPointsPerAnimatedLine; %Used to set the number of max points per animated line. 
         
+        sglChanSubset; %subset of SpikeGLX channels 
+
         mnChanSubset; %Used to get the number of neural channels (used instead of sglChanSubset, which returns all channels, not just MN chans)
     end
     
@@ -270,7 +271,7 @@ classdef SpikeGrid < most.Model
                         
             %Initialize a default display for appearances (some aspects gets overridden by processing on start())
 %             obj.sglChanSubset = GetChannelSubset(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
-             obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
+% NO - ED            obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
             obj.zprvApplyChanOrderAndSubset();
 
             numNeuralChans = numel(obj.neuralChansAvailable);
@@ -548,7 +549,7 @@ classdef SpikeGrid < most.Model
             % obj.sglChanSubset does not discriminate between neural, aux, and other types of channels.
             % return obj.sglChanSubset's neural chans only. hGrid.sglParamCache.niMNChans1, hGrid.sglParamCache.niMNChans2
             lclMNChans = str2num(num2str(obj.sglParamCache.niMNChans1));
-            lclChanLim = (max(lclMNChans) + 1) * obj.PLOTS_PER_TAB;
+            lclChanLim = (max(lclMNChans) + 1) * obj.sglParamCache.niMuxFactor; % DO NOT HARDCODE THIS TO NUMBER OF WAVEFORMS PER TAB.
             %val = obj.sglChanSubset;
             val = obj.sglChanSubset(obj.sglChanSubset < lclChanLim);
         end
@@ -675,6 +676,10 @@ classdef SpikeGrid < most.Model
            else
                val = Inf;
            end
+        end
+        
+        function val = get.sglChanSubset(obj)
+             val = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
         end
         
         function set.spikesPerPlot(obj,val)
@@ -1337,8 +1342,8 @@ classdef SpikeGrid < most.Model
                 rmsMultipleThresh = strcmpi(obj.thresholdType,'rmsMultiple');
                 rmsMultipleInitializing = rmsMultipleThresh && obj.thresholdRMSLastScan == 0;
                 rasterDisplayMode = strcmpi(obj.displayMode,'raster');
-				stimulusMode = ~isempty(obj.stimStartChannel) && ~isempty(obj.stimStartThreshold)
-                stimulusTriggeredWaveformMode = strcmpi(obj.displayMode,'waveform') && stimulusMode
+				stimulusMode = ~isempty(obj.stimStartChannel) && ~isempty(obj.stimStartThreshold);
+                stimulusTriggeredWaveformMode = strcmpi(obj.displayMode,'waveform') && stimulusMode;
 				
                 sampRate = obj.sglParamCache.niSampRate;
                 sampPeriod = 1 / sampRate;
@@ -2597,6 +2602,7 @@ end
 %for i=1:numNeuralChans
 for h=1:numel(chanSubset)
     i = sglChanSubset(h)+1;
+    fprintf('h: %d, i: %d\n',h,i);    
     %Determine recent (already detected) spike scan numbers to exclude from spike search
     lastSpikeScanNumIdx = find(spikeData{i}.scanNums < bufStartScanNum,1,'last');
     if isempty(lastSpikeScanNumIdx)
