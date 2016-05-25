@@ -1467,11 +1467,11 @@ classdef SpikeGrid < most.Model
     				numNeuralChans = length(obj.spikeData);
 					newSpikeScanNums = cell(numNeuralChans,1);
 
-					for h=1:numel(obj.sglChanSubset)
+					for h=1:numel(obj.mnChanSubset)
 						i = obj.mnChanSubset(h)+1;
 						% Make every waveform a "spike" when in stimulusTriggeredWaveform Mode
 						newSpikeScanNums = cell(numNeuralChans,1);
-						newSpikeScanNums{i}(end+1) = nextSpikeScanNum;
+						%newSpikeScanNums{i}(end+1) = nextSpikeScanNum;
 					end % for h=1:numel(chanSubset)
                 end % if ~stimulusTriggeredWaveformMode
 					
@@ -1716,7 +1716,6 @@ classdef SpikeGrid < most.Model
             end
             
             function znstDetectStimulus(bufStartScanNum,changedFileName)
-                
                 %TODO: Remove changedFileName relevant code everywhere
                 if nargin < 2
                     changedFileName = false; %TEMP HACK
@@ -1733,7 +1732,10 @@ classdef SpikeGrid < most.Model
                 %Detect & record stimulus start and associated stimulus window
 %                stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,obj.stimStartChannel + 1) > (obj.stimStartThreshold / obj.voltsPerBitNeural)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
                 stimChanRawDataIdx = find(obj.sglChanSubset==obj.stimStartChannel);
-                stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+               % stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+              %  stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1; %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+                triggerThreshVal = obj.stimStartThreshold / obj.voltsPerBitAux;
+                stimIdx = find((diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > triggerThreshVal) == 1,1); %Fixed - Ed
                 %fprintf('stimChanRawDataIdx: %d min data: %g max data: %g\n', stimChanRawDataIdx, min(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)), max(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)));
                 if ~isempty(stimIdx)
                     
