@@ -1464,44 +1464,47 @@ classdef SpikeGrid < most.Model
 					end
 					t4 = toc(t0);
                 else
-                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                    numNeuralChans = length(obj.spikeData);
-                    postSpikeNumScans = round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate);
-                    newSpikeScanNums = cell(numNeuralChans,1);
-                    
-                    %% CUSTOM CODE %%
-                    for lh=1:numel(obj.mnChanSubset)
-                        i = obj.mnChanSubset(lh)+1;
-                        %Determine recent (already detected) spike scan numbers to exclude from spike search
-                        lastSpikeScanNumIdx = find(obj.spikeData{i}.scanNums < bufStartScanNum,1,'last');
-                        if isempty(lastSpikeScanNumIdx)
-                            recentSpikeScanNums = obj.spikeData{i}.scanNums;
-                        else
-                            recentSpikeScanNums = obj.spikeData{i}.scanNums(lastSpikeScanNumIdx + 1:end);
-                        end
-                        % Make every waveform a "spike" when in stimulusTriggeredWaveform Mode
-                        %newSpikeScanNums = cell(numNeuralChans,1);
-                        scansToSearch = size(obj.rawDataBuffer,1) - postSpikeNumScans;
-                        
-                        %maxIdx = bufStartScanNum + scansToSearch;
-                        currIdx = 1; %Index into rawDataBuffer
-                        
-                        while currIdx < scansToSearch
-                            nextSpikeIdx = currIdx + 1;
-                            nextSpikeScanNum = bufStartScanNum + nextSpikeIdx - 1;
-                            
-                            %Add new spike, if not added already
-                            if ~ismember(nextSpikeScanNum,recentSpikeScanNums)
-                                newSpikeScanNums{i}(end+1) = nextSpikeScanNum;
-                            end
-                            
-                            %Impose refractory period
-                            currIdx = nextSpikeIdx + postSpikeNumScans; %Will start with final scan of the post-spike-window...to use as first scan for next diff operation (first element never selected)
-                        end
-                        
-                    end % for h=1:numel(chanSubset)
+                    fprintf('nothing...\n');
+%                     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                     % Store the spike, store the waveform
+%                     %  * looking through the data
+%                     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                     numNeuralChans = length(obj.spikeData);
+%                     postSpikeNumScans = round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate);
+%                     newSpikeScanNums = cell(numNeuralChans,1);
+%                     
+%                     %% CUSTOM CODE %%
+%                     for lh=1:numel(obj.mnChanSubset)
+%                         i = obj.mnChanSubset(lh)+1;
+%                         %Determine recent (already detected) spike scan numbers to exclude from spike search
+%                         lastSpikeScanNumIdx = find(obj.spikeData{i}.scanNums < bufStartScanNum,1,'last');
+%                         if isempty(lastSpikeScanNumIdx)
+%                             recentSpikeScanNums = obj.spikeData{i}.scanNums;
+%                         else
+%                             recentSpikeScanNums = obj.spikeData{i}.scanNums(lastSpikeScanNumIdx + 1:end);
+%                         end
+%                         % Make every waveform a "spike" when in stimulusTriggeredWaveform Mode
+%                         %newSpikeScanNums = cell(numNeuralChans,1);
+%                         scansToSearch = size(obj.rawDataBuffer,1) - postSpikeNumScans;
+%                         
+%                         %maxIdx = bufStartScanNum + scansToSearch;
+%                         currIdx = 1; %Index into rawDataBuffer
+%                         
+%                         while currIdx < scansToSearch
+%                             nextSpikeIdx = currIdx + 1;
+%                             nextSpikeScanNum = bufStartScanNum + nextSpikeIdx - 1;
+%                             
+%                             %Add new spike, if not added already
+%                             if ~ismember(nextSpikeScanNum,recentSpikeScanNums)
+%                                 newSpikeScanNums{i}(end+1) = nextSpikeScanNum;
+%                             end
+%                             
+%                             %Impose refractory period
+%                             currIdx = nextSpikeIdx + postSpikeNumScans; %Will start with final scan of the post-spike-window...to use as first scan for next diff operation (first element never selected)
+%                         end
+%                         
+%                     end % for h=1:numel(chanSubset)
                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1511,12 +1514,14 @@ classdef SpikeGrid < most.Model
 				if isempty(newSpikeScanNums)
 					%no-op
                 elseif stimulusTriggeredWaveformMode %If stimulus triggered waveform, store all waveforms as spikes.
-                    edStoreNewSpikes(newSpikeScanNums,bufStartScanNum);
+                    edDetectStimulus(bufStartScanNum);
+                    % stimTotalCount: %d stimScanNum: %d stimWindowStartScanNum: %d stimWindowEndScanNum: %d bufStartScanNum: %d\n',...
+                    % obj.stimTotalCount,obj.stimScanNums(end),obj.stimWindowStartScanNums(end),obj.stimWindowEndScanNums(end),bufStartScanNum);
+                    %edStoreNewSpikes(newSpikeScanNums,bufStartScanNum);
+                    edStoreNewSpikes(obj.stimScanNums,bufStartScanNum);
 				elseif isempty(obj.gatingChannel) || rasterDisplayMode %At moment, gating is not supported in combination with raster mode
 					%Store all new spikes
-						 
 					znstStoreNewSpikes(newSpikeScanNums,bufStartScanNum);
-					
 				else %gating
 					
 					%Store only those new spikes that fall within a gating window
@@ -1573,7 +1578,7 @@ classdef SpikeGrid < most.Model
 				t5 = toc(t0);
 				
                 %Detect, record, classify stimulus start, as needed
-                if rasterDisplayMode || stimulusTriggeredWaveformMode 
+                if rasterDisplayMode % || stimulusTriggeredWaveformMode 
                     %oldStimScanNums = obj.stimScanNums;
                     %znstDetectStimulus(bufStartScanNum,changedFileName);
                     % Erase all stimScanNums before running stimulus
@@ -1756,6 +1761,8 @@ classdef SpikeGrid < most.Model
             end
 
             
+            %
+            % function edStoreNewSpikes(sampleIndices,stimStartIndex)
             function edStoreNewSpikes(newSpikeScanNums,bufStartScanNum)
                 scanWindowRelative = obj.spikeScanWindow(1):obj.spikeScanWindow(2);
                 waveformDisplay = strcmpi(obj.displayMode,'waveform');
@@ -1795,7 +1802,7 @@ classdef SpikeGrid < most.Model
                         if waveformDisplay
                             for j=1:numNewSpikes
                                 scanWindow = scanWindowRelative + newSpikeScanNums{i}(j);
-                                idxWindow = scanWindow - bufStartScanNum;
+                                idxWindow = scanWindow - bufStartScanNum; % A scan is a sample.
                                 
                                 %Handle case of spikes at very start of spike-plotting
                                 if find(idxWindow < 1) %'early' spike
@@ -1863,8 +1870,47 @@ classdef SpikeGrid < most.Model
                 end
             end
             
-            
-            
+            function edDetectStimulus(bufStartScanNum,changedFileName)
+                %TODO: Remove changedFileName relevant code everywhere
+                if nargin < 2
+                    changedFileName = false; %TEMP HACK
+                end
+                
+                if changedFileName || isempty(obj.stimLastEventScanNumWindow)
+                    spikeDataBufStartIdx = 1;
+                elseif obj.stimLastEventScanNumWindow(2) >= bufStartScanNum %Don't detect stimulus start if already within existing stimulus window
+                    spikeDataBufStartIdx = obj.stimLastEventScanNumWindow(2) - bufStartScanNum + 1;
+                else
+                    spikeDataBufStartIdx = 1;
+                end
+                
+                %Detect & record stimulus start and associated stimulus window
+%                stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,obj.stimStartChannel + 1) > (obj.stimStartThreshold / obj.voltsPerBitNeural)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+                stimChanRawDataIdx = find(obj.sglChanSubset==obj.stimStartChannel);
+                % stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+                %  stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1; %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+                triggerThreshVal = obj.stimStartThreshold / obj.voltsPerBitAux;
+                stimIdx = find((diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > triggerThreshVal) == 1,1); %Fixed - Ed
+                %fprintf('stimChanRawDataIdx: %d min data: %g max data: %g\n', stimChanRawDataIdx, min(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)), max(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)));
+                if ~isempty(stimIdx)
+                    newStimScanNum = bufStartScanNum + stimIdx - 1;
+                    obj.stimScanNums(end+1) = newStimScanNum;
+                    
+                    obj.stimLastEventScanNumWindow = newStimScanNum + round(obj.stimTimeWindow/sampPeriod);
+                    
+                    if changedFileName
+                        obj.stimLastEventScanNumWindow = max(obj.stimLastEventScanNumWindow,bufStartScanNum);
+                    end
+                    
+                    obj.stimWindowStartScanNums(end+1) = obj.stimLastEventScanNumWindow(1);
+                    obj.stimWindowEndScanNums(end+1) = obj.stimLastEventScanNumWindow(2);
+                    obj.stimEventTypeNames{end+1} = '';
+                    
+                    obj.stimTotalCount = obj.stimTotalCount + 1;
+                    fprintf('Detected stim! stimTotalCount: %d stimScanNum: %d stimWindowStartScanNum: %d stimWindowEndScanNum: %d bufStartScanNum: %d\n',...
+                        obj.stimTotalCount,obj.stimScanNums(end),obj.stimWindowStartScanNums(end),obj.stimWindowEndScanNums(end),bufStartScanNum);
+                end
+            end            
             
             function znstClassifyStimulus(bufStartScanNum)
                 
