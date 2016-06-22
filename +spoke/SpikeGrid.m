@@ -182,6 +182,8 @@ classdef SpikeGrid < most.Model
         bmarkPreProcessTimeStats = zeros(3,1);; %Array of [mean std n]
         bmarkPlotTimeStats = zeros(3,1);; %Array of [mean std n]
         bmarkPostProcessTimeStats = zeros(3,1);; %Array of [mean std n]
+        
+        flipVal = 0; % Internal property used for alternating spacing of debugging text.
     end
     
     properties (Hidden, SetAccess=immutable)
@@ -1784,6 +1786,7 @@ classdef SpikeGrid < most.Model
                 stimIdx = find((diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > triggerThreshVal) == 1,1); %Fixed - Ed
                 %fprintf('stimChanRawDataIdx: %d min data: %g max data: %g\n', stimChanRawDataIdx, min(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)), max(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)));
                 if ~isempty(stimIdx)
+                    obj.flipVal = ~obj.flipVal; % alternate flipVal.
                     newStimScanNum = bufStartScanNum + stimIdx - 1;
                     obj.stimScanNums(end+1) = newStimScanNum;
                     
@@ -1794,6 +1797,9 @@ classdef SpikeGrid < most.Model
                     obj.stimEventTypeNames{end+1} = '';
                     
                     obj.stimTotalCount = obj.stimTotalCount + 1;
+                    if (obj.flipVal)
+                       fprintf('   '); 
+                    end
                     fprintf('Detected stim! stimTotalCount: %d stimScanNum: %d stimWindowStartScanNum: %d stimWindowEndScanNum: %d bufStartScanNum: %d\n',...
                         obj.stimTotalCount,obj.stimScanNums(end),obj.stimWindowStartScanNums(end),obj.stimWindowEndScanNums(end),bufStartScanNum);
                 end
@@ -2303,7 +2309,7 @@ classdef SpikeGrid < most.Model
 
                 numNewSpikes = length(obj.spikeData{i}.scanNums);
                 totalNewSpikes = totalNewSpikes + numNewSpikes;
-                                       
+
                 %Plot new spike lines
                 spikeScanWindowLength = diff(obj.spikeScanWindow)+1;
                 xData = linspace(obj.spikeTimeWindow(1),obj.spikeTimeWindow(2),spikeScanWindowLength)';
@@ -2345,7 +2351,6 @@ classdef SpikeGrid < most.Model
                                 waveform = (double(waveform) - obj.thresholdMean(i)) / obj.thresholdRMS(i);
                             end
                     end
-                                    
                     %Update line object with waveform for current spike
                     obj.hSpikeLines(plotIdx).addpoints(vertcat(xData, NaN),vertcat(waveform, NaN)); % old
                     obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;
