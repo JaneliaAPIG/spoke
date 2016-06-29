@@ -1674,13 +1674,13 @@ classdef SpikeGrid < most.Model
                 obj.bmarkPostProcessTimeStats(1) = mu;
                 obj.bmarkPostProcessTimeStats(2) = std;
                 obj.bmarkPostProcessTimeStats(3) = obj.bmarkPostProcessTimeStats(3) + 1;
-             % ED KANG ED KANG ED KANG   
-             %   fprintf('Total Time (%d scans/%d chans): %g -- Read: <%g, %g, %g> Plot: <%g, %g, %g> PreProc: <%g, %g, %g> PostProc: <%g, %g, %g> (Format: <last, mean, std>)\n', ...
-             %       scansToRead,size(newData,2),1000*t9,...
-             %       readTime,obj.bmarkReadTimeStats(1),obj.bmarkReadTimeStats(2),...
-             %       plotTime,obj.bmarkPlotTimeStats(1),obj.bmarkPlotTimeStats(2),...
-             %       procTimePre,obj.bmarkPreProcessTimeStats(1),obj.bmarkPreProcessTimeStats(2),...   
-             %       procTimePost,obj.bmarkPostProcessTimeStats(1),obj.bmarkPostProcessTimeStats(2));
+             %ED KANG ED KANG ED KANG   
+               fprintf('Total Time (%d scans/%d chans): %g -- Read: <%g, %g, %g> Plot: <%g, %g, %g> PreProc: <%g, %g, %g> PostProc: <%g, %g, %g> (Format: <last, mean, std>)\n', ...
+                   scansToRead,size(newData,2),1000*t9,...
+                   readTime,obj.bmarkReadTimeStats(1),obj.bmarkReadTimeStats(2),...
+                   plotTime,obj.bmarkPlotTimeStats(1),obj.bmarkPlotTimeStats(2),...
+                   procTimePre,obj.bmarkPreProcessTimeStats(1),obj.bmarkPreProcessTimeStats(2),...   
+                   procTimePost,obj.bmarkPostProcessTimeStats(1),obj.bmarkPostProcessTimeStats(2));
             
             catch ME %Handle Timer CB errors
                 most.idioms.reportError(ME);
@@ -1807,7 +1807,9 @@ classdef SpikeGrid < most.Model
             
             %
             % function edStoreNewSpikes(sampleIndices,stimStartIndex)
-            function edStoreNewSpikes(stimScanNums,bufStartScanNum)                
+            function edStoreNewSpikes(stimScanNums,bufStartScanNum) 
+                fprintf('Storing spikes. stimScanNums: %s bufStartScanNum: %d\n',mat2str(stimScanNums), bufStartScanNum);
+                
                 scanWindowRelative = obj.spikeScanWindow(1):obj.spikeScanWindow(2);
                 try
                      for h=1:numel(obj.mnChanSubset)
@@ -1828,7 +1830,7 @@ classdef SpikeGrid < most.Model
                         end
                         %stimScanNums
                         %fprintf('length of new stimScanNums: %d\n',length(obj.spikeData{i}.scanNums));
-                        
+                  
                         for j=1:numNewSpikes
                             scanWindow = scanWindowRelative + stimScanNums(j);
                             
