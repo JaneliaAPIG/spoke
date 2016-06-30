@@ -106,7 +106,6 @@ classdef SpikeGrid < most.Model
     properties (Hidden,SetAccess=protected)
         hSGL; %Handle to SpikeGLX object
         sglParamCache; %cached SpikeGLX parameters
-        sglChanSubset; %subset of SpikeGLX channels 
         
         hTimer; %Timer to use for periodically checking Spoke's input data stream
         hPSTHTimer; %Timer to periodically call plotPSTH() method
@@ -130,9 +129,11 @@ classdef SpikeGrid < most.Model
         
         %         neuralChans; %Acquisition channel numbers corresponding to neural inputs. Ordered as in SpikeGLX connection.
         %         auxChans; %Acquisition channel numbers corresponding to auxiliary inputs, i.e. suited for gating/stimulus. These are /not/ displayed. Ordered as in SpikeGLX connection.
+        sglChanSubset; %subset of SpikeGLX channels  (includes neural and non-neural channels)
         
         neuralChanDispOrder; %Order in which neuralChans should be displayed. Includes all acquired neural chans, whether included in subset or not.
         
+        neuralChanAcqList; % List of neural chans included in SpikeGLX chan subset
         neuralChanDispList; %Ordered list of neural chans displayed. Display ordering applied. Channel subset, if any, is applied.
         auxChanProcList; %List of auxiliary chans processed. Channel subset, if any, is applied.       
                 
@@ -183,6 +184,8 @@ classdef SpikeGrid < most.Model
         bmarkPreProcessTimeStats = zeros(3,1);; %Array of [mean std n]
         bmarkPlotTimeStats = zeros(3,1);; %Array of [mean std n]
         bmarkPostProcessTimeStats = zeros(3,1);; %Array of [mean std n]
+        
+        flipVal = 0; % Internal property used for alternating spacing of debugging text.
     end
     
     properties (Hidden, SetAccess=immutable)
@@ -217,7 +220,9 @@ classdef SpikeGrid < most.Model
         
         maxPointsPerAnimatedLine; %Used to set the number of max points per animated line. 
         
-        mnChanSubset; %Used to get the number of neural channels (used instead of sglChanSubset, which returns all channels, not just MN chans)
+        
+
+        %neuralChanAcqList; %Used to get the number of neural channels (used instead of sglChanSubset, which returns all channels, not just MN chans)
     end
     
     %Constants
@@ -270,7 +275,7 @@ classdef SpikeGrid < most.Model
                         
             %Initialize a default display for appearances (some aspects gets overridden by processing on start())
 %             obj.sglChanSubset = GetChannelSubset(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
-             obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
+            obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
             obj.zprvApplyChanOrderAndSubset();
 
             numNeuralChans = numel(obj.neuralChansAvailable);
@@ -543,15 +548,15 @@ classdef SpikeGrid < most.Model
         function val = get.refreshPeriodAvgScans(obj)
             val = round(get(obj.hTimer,'Period') * obj.sglParamCache.niSampRate);
         end
-        
-        function val = get.mnChanSubset(obj)
-            % obj.sglChanSubset does not discriminate between neural, aux, and other types of channels.
-            % return obj.sglChanSubset's neural chans only. hGrid.sglParamCache.niMNChans1, hGrid.sglParamCache.niMNChans2
-            lclMNChans = str2num(num2str(obj.sglParamCache.niMNChans1));
-            lclChanLim = (max(lclMNChans) + 1) * obj.PLOTS_PER_TAB;
-            %val = obj.sglChanSubset;
-            val = obj.sglChanSubset(obj.sglChanSubset < lclChanLim);
-        end
+%         
+%         function val = get.neuralChanAcqList(obj)
+%             % obj.sglChanSubset does not discriminate between neural, aux, and other types of channels.
+%             % return obj.sglChanSubset's neural chans only. hGrid.sglParamCache.niMNChans1, hGrid.sglParamCache.niMNChans2
+%             lclMNChans = str2num(num2str(obj.sglParamCache.niMNChans1));
+%             lclChanLim = (max(lclMNChans) + 1) * obj.sglParamCache.niMuxFactor; % DO NOT HARDCODE THIS TO NUMBER OF WAVEFORMS PER TAB.
+%             %val = obj.sglChanSubset;
+%             val = obj.sglChanSubset(obj.sglChanSubset < lclChanLim);
+%         end
         
         function set.refreshRate(obj,val)
             obj.zprpAssertNotRunning('refreshRate');
@@ -676,6 +681,10 @@ classdef SpikeGrid < most.Model
                val = Inf;
            end
         end
+        
+%         function val = get.sglChanSubset(obj)
+%              val = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
+%         end
         
         function set.spikesPerPlot(obj,val)
             obj.validatePropArg('spikesPerPlot',val);
@@ -1032,6 +1041,9 @@ classdef SpikeGrid < most.Model
                     %Draw new threshold lines, if applicable
                     obj.zprvDrawThresholdLines();
                     
+                    [obj.stimScanNums, obj.stimWindowStartScanNums, obj.stimWindowEndScanNums] = deal([]);
+                    obj.stimEventTypeNames = {};
+
                 case 'raster'
                     
                     obj.stimTotalCount = 0;
@@ -1337,7 +1349,9 @@ classdef SpikeGrid < most.Model
                 rmsMultipleThresh = strcmpi(obj.thresholdType,'rmsMultiple');
                 rmsMultipleInitializing = rmsMultipleThresh && obj.thresholdRMSLastScan == 0;
                 rasterDisplayMode = strcmpi(obj.displayMode,'raster');
-                
+				stimulusMode = ~isempty(obj.stimStartChannel) && ~isempty(obj.stimStartThreshold);
+                stimulusTriggeredWaveformMode = strcmpi(obj.displayMode,'waveform') && stimulusMode;
+				
                 sampRate = obj.sglParamCache.niSampRate;
                 sampPeriod = 1 / sampRate;
                 
@@ -1436,111 +1450,124 @@ classdef SpikeGrid < most.Model
                 %Append data to rawDataBuffer
                 bufStartScanNum = znstAugmentRawDataBuffer(scansToRead, newData);
                 t3 = toc(t0);
-                
-                %Detect spike(s) within data buffer, except for final spike-window 'post' time
-                if size(obj.rawDataBuffer,1) < (obj.spikeScanWindow(2) + 2)
-                    return;
+                				
+				%Detect spike(s) within data buffer, except for final spike-window 'post' time
+				if size(obj.rawDataBuffer,1) < (obj.spikeScanWindow(2) + 2)
+					return;
                 end
-                if rmsMultipleInitializing %Handle case where no RMS data has been computed yet
-                    %obj.rawDataBuffer((obj.refreshPeriodAvgScans+1):end,:) = []; %VVV062812: Is this needed/wanted?
-                    
-                    znstUpdateRMSAndMean([],[]); %Compute rms/mean without spikes
-                    newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum); %Detect spikes using rmsMultiple=obj.INIT_RMS_THRESHOLD
-                    znstUpdateRMSAndMean(newSpikeScanNums,bufStartScanNum); %Recompute a rms value with, if anything, excess spike exclusion
-                    
-                    %newSpikeScanNums = cell(numDispChans,1); %Don't plot/store these spikes, though
-                    newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum);
+                
+                newSpikeScanNums = cell(numNeuralChans,1);
+                
+				if ~stimulusTriggeredWaveformMode
+					if rmsMultipleInitializing %Handle case where no RMS data has been computed yet
+						%obj.rawDataBuffer((obj.refreshPeriodAvgScans+1):end,:) = []; %VVV062812: Is this needed/wanted?
+						
+						znstUpdateRMSAndMean([],[]); %Compute rms/mean without spikes
+						newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum); %Detect spikes using rmsMultiple=obj.INIT_RMS_THRESHOLD
+						znstUpdateRMSAndMean(newSpikeScanNums,bufStartScanNum); %Recompute a rms value with, if anything, excess spike exclusion
+						
+						%newSpikeScanNums = cell(numDispChans,1); %Don't plot/store these spikes, though
+						newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum);
+					else
+						newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum);
+					end
+					t4 = toc(t0);
                 else
-                    newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum);
-                end
-                t4 = toc(t0);
-                
-                %Store spike waveform data, abiding gate/stimulus signals as applicable
-                if isempty(newSpikeScanNums)
-                    %no-op
-                    
-                elseif isempty(obj.gatingChannel) || rasterDisplayMode %At moment, gating is not supported in combination with raster mode
-                    %Store all new spikes
-                         
-                    znstStoreNewSpikes(newSpikeScanNums,bufStartScanNum);
-                    
-                else %gating
-                    
-                    %Store only those new spikes that fall within a gating window
-                    rawDataBufferStartIdx = 1;
-                    spikesToStore = cell(numNeuralChans,1);
+                    obj.stimScanNums=[];
+                    edDetectStimulus(bufStartScanNum);
+                    edStoreNewSpikes(obj.stimScanNums,bufStartScanNum);
+                end % if ~stimulusTriggeredWaveformMode
+					
+				%Store spike waveform data, abiding gate/stimulus signals as applicable
+                if ~stimulusTriggeredWaveformMode %If stimulus triggered waveform, store all waveforms as spikes.
+                    if isempty(newSpikeScanNums)
+                        %no-op
+                    elseif isempty(obj.gatingChannel) || rasterDisplayMode %At moment, gating is not supported in combination with raster mode
+                        %Store all new spikes
+                        znstStoreNewSpikes(newSpikeScanNums,bufStartScanNum);
+                    else %gating
 
-                    while any(cellfun(@(x)~isempty(x),newSpikeScanNums)) %Some detected spikes remain on at least one channel
-                        if ~isempty(obj.gatedScans) %A gating window has been previously computed
-                            
-                            rawDataBufferStartIdx = obj.gatedScans(2) + 1; %Subsequent searches now begin after the gating window
-                            
-                            %for i=1:numNeuralChans
-                            for h=1:numel(obj.mnChanSubset)
-                                i = obj.sglChanSubset(h) + 1;
-                                fprintf('i = %d, numNewSpikes = %d, numel(newSpikeScanNums) = %d\n',i,numNewSpikes,numel(newSpikeScanNums));
+                        %Store only those new spikes that fall within a gating window
+                        rawDataBufferStartIdx = 1;
+                        spikesToStore = cell(numNeuralChans,1);
 
-                                if isempty(newSpikeScanNums{i})
-                                    continue;
+                        while any(cellfun(@(x)~isempty(x),newSpikeScanNums)) %Some detected spikes remain on at least one channel
+                            if ~isempty(obj.gatedScans) %A gating window has been previously computed
+
+                                rawDataBufferStartIdx = obj.gatedScans(2) + 1; %Subsequent searches now begin after the gating window
+
+                                %for i=1:numNeuralChans
+                                for h=1:numel(obj.neuralChanAcqList)
+                                    i = obj.sglChanSubset(h) + 1;
+                                    fprintf('i = %d, numNewSpikes = %d, numel(newSpikeScanNums) = %d\n',i,numNewSpikes,numel(newSpikeScanNums));
+
+                                    if isempty(newSpikeScanNums{i})
+                                        continue;
+                                    end
+
+                                    idxs = find(newSpikeScanNums{i} >= obj.gatedScans(1)  & newSpikeScanNums{i} <= obj.gatedScans(2)); %Find idxs into spikeScanNum arrays containing scan numbers within the gating window
+
+                                    if isempty(idxs)
+                                        continue;
+                                    end
+
+                                    spikesToStore{i} = newSpikeScanNums{i}(idxs);
+
+                                    newSpikeScanNums{i}(1:idxs(end)) = []; %Clear all detected spikes up through the last spike detected within gate for this channel
+
                                 end
-                                
-                                idxs = find(newSpikeScanNums{i} >= obj.gatedScans(1)  & newSpikeScanNums{i} <= obj.gatedScans(2)); %Find idxs into spikeScanNum arrays containing scan numbers within the gating window
-                                
-                                if isempty(idxs)
-                                    continue;
-                                end
-                                
-                                spikesToStore{i} = newSpikeScanNums{i}(idxs);
-                                
-                                newSpikeScanNums{i}(1:idxs(end)) = []; %Clear all detected spikes up through the last spike detected within gate for this channel
-                                
-                            end
-                            
-                            obj.gatedScans = []; %Done processing spikes with the last gate's scans
-                            
-                        elseif rawDataBufferStartIdx > length(obj.rawDataBuffer) % Have traversed the full rawDataBuffer -- all the spikes flagged within a gate should already be stored
-                            break;
-                        else
-                            %Detect first threshold-crossing on gating channel for remainder of scan window
-                            crossIdx = rawDataBufferStartIdx + find(diff(obj.rawDataBuffer(rawDataBufferStartIdx:end,obj.gatingChannel + 1) > obj.gatingThreshold) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
-                            
-                            if isempty(crossIdx) %no threshold crosngs on gate channel detected
+
+                                obj.gatedScans = []; %Done processing spikes with the last gate's scans
+
+                            elseif rawDataBufferStartIdx > length(obj.rawDataBuffer) % Have traversed the full rawDataBuffer -- all the spikes flagged within a gate should already be stored
                                 break;
                             else
-                                obj.gatedScans(1) = crossIdx + bufStartScanNum - 1; %Should not be off-by-one -- crossIdx indicates which element starting from bufStartScanNum has crossing. If it's second element (earliest posible), then gate starts at bufStartScanNum+1
-                                obj.gatedScans(2) = obj.gatedScans(1) + round(obj.gatingDuration / sampPeriod) - 1;
+                                %Detect first threshold-crossing on gating channel for remainder of scan window
+                                crossIdx = rawDataBufferStartIdx + find(diff(obj.rawDataBuffer(rawDataBufferStartIdx:end,obj.gatingChannel + 1) > obj.gatingThreshold) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+
+                                if isempty(crossIdx) %no threshold crosngs on gate channel detected
+                                    break;
+                                else
+                                    obj.gatedScans(1) = crossIdx + bufStartScanNum - 1; %Should not be off-by-one -- crossIdx indicates which element starting from bufStartScanNum has crossing. If it's second element (earliest posible), then gate starts at bufStartScanNum+1
+                                    obj.gatedScans(2) = obj.gatedScans(1) + round(obj.gatingDuration / sampPeriod) - 1;
+                                end
+
                             end
-                            
+
                         end
-                        
+
+                        znstStoreNewSpikes(spikesToStore,bufStartScanNum);
                     end
-               
-                    znstStoreNewSpikes(spikesToStore,bufStartScanNum);
                 end
                 t5 = toc(t0);
-                
+				
                 %Detect, record, classify stimulus start, as needed
-                if rasterDisplayMode
+                if rasterDisplayMode % || stimulusTriggeredWaveformMode 
                     %oldStimScanNums = obj.stimScanNums;
                     %znstDetectStimulus(bufStartScanNum,changedFileName);
+                    % Erase all stimScanNums before running stimulus
+                    % detection.
+                    obj.stimScanNums=[];
+                    chanNewSpikes=[];
                     znstDetectStimulus(bufStartScanNum);
-                    
                     
                     %newStimScanNums = setdiff(obj.stimScanNums,oldStimScanNums);
                     %assert(all(newStimScanNums > bufStartScanNum));
-                    
-                    if ~isempty(obj.stimScanNums)
+                    if ~isempty(obj.stimScanNums) && ~stimulusTriggeredWaveformMode
+                        % fprintf('# of stimScanNums: %d\n ',length(obj.stimScanNums));
                         znstClassifyStimulus(bufStartScanNum); %Classify stimulus event type, if possible
+                        
+                        chanNewSpikes = znstTagSpikes(); %Tag spike data with stimulus/event info, as needed/possible
+                        %chanNewSpikes.allstim
                     end
-                    
-                    chanNewSpikes = znstTagSpikes(); %Tag spike data with stimulus/event info, as needed/possible
-
                 end
                 t6 = toc(t0);
                 
                 %Plot newly detected spike(s) that were stored for display - will always be enough post data, and generally enough pre-data except for spikes at very beginning
                 if rasterDisplayMode
                     obj.zprvRefreshRasterGrid(chanNewSpikes);
+                elseif stimulusTriggeredWaveformMode
+                    obj.zprvPlotNewSpikes();
                 else
                     obj.zprvPlotNewSpikes();
                 end
@@ -1601,13 +1628,12 @@ classdef SpikeGrid < most.Model
                 obj.bmarkPostProcessTimeStats(1) = mu;
                 obj.bmarkPostProcessTimeStats(2) = std;
                 obj.bmarkPostProcessTimeStats(3) = obj.bmarkPostProcessTimeStats(3) + 1;
-                
-                fprintf('Total Time (%d scans/%d chans): %g -- Read: <%g, %g, %g> Plot: <%g, %g, %g> PreProc: <%g, %g, %g> PostProc: <%g, %g, %g> (Format: <last, mean, std>)\n', ...
-                    scansToRead,size(newData,2),1000*t9,...
-                    readTime,obj.bmarkReadTimeStats(1),obj.bmarkReadTimeStats(2),...
-                    plotTime,obj.bmarkPlotTimeStats(1),obj.bmarkPlotTimeStats(2),...
-                    procTimePre,obj.bmarkPreProcessTimeStats(1),obj.bmarkPreProcessTimeStats(2),...   
-                    procTimePost,obj.bmarkPostProcessTimeStats(1),obj.bmarkPostProcessTimeStats(2));
+%                fprintf('Total Time (%d scans/%d chans): %g -- Read: <%g, %g, %g> Plot: <%g, %g, %g> PreProc: <%g, %g, %g> PostProc: <%g, %g, %g> (Format: <last, mean, std>)\n', ...
+%                    scansToRead,size(newData,2),1000*t9,...
+%                    readTime,obj.bmarkReadTimeStats(1),obj.bmarkReadTimeStats(2),...
+%                    plotTime,obj.bmarkPlotTimeStats(1),obj.bmarkPlotTimeStats(2),...
+%                    procTimePre,obj.bmarkPreProcessTimeStats(1),obj.bmarkPreProcessTimeStats(2),...   
+%                    procTimePost,obj.bmarkPostProcessTimeStats(1),obj.bmarkPostProcessTimeStats(2));
             
             catch ME %Handle Timer CB errors
                 most.idioms.reportError(ME);
@@ -1639,7 +1665,7 @@ classdef SpikeGrid < most.Model
                 try
 %                     for i=1:numNeuralChans
 %                     for i=1:numel(obj.sglChanSubset)
-                     for h=1:numel(obj.mnChanSubset)
+                     for h=1:numel(obj.neuralChanAcqList)
                          i = obj.sglChanSubset(h)+1;
                         %TODO: Where appropriate (e.g. most waveform display cases), short-circuit storage if not being displayed
                         
@@ -1695,9 +1721,91 @@ classdef SpikeGrid < most.Model
                     ME.rethrow();
                 end
             end
+
+            function edDetectStimulus(bufStartScanNum)
+                if isempty(obj.stimLastEventScanNumWindow)
+                    spikeDataBufStartIdx = 1;
+                elseif obj.stimLastEventScanNumWindow(2) >= bufStartScanNum %Don't detect stimulus start if already within existing stimulus window
+                    spikeDataBufStartIdx = obj.stimLastEventScanNumWindow(2) - bufStartScanNum + 1;
+                else
+                    spikeDataBufStartIdx = 1;
+                end
+                %Detect & record stimulus start and associated stimulus window
+%                stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,obj.stimStartChannel + 1) > (obj.stimStartThreshold / obj.voltsPerBitNeural)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+                stimChanRawDataIdx = find(obj.sglChanSubset==obj.stimStartChannel);
+                % stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+                %  stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1; %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+                triggerThreshVal = obj.stimStartThreshold / obj.voltsPerBitAux;
+                stimIdx = find((diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > triggerThreshVal) == 1,1); %Fixed - Ed
+                %fprintf('stimChanRawDataIdx: %d min data: %g max data: %g\n', stimChanRawDataIdx, min(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)), max(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)));
+                if ~isempty(stimIdx)
+                    obj.flipVal = ~obj.flipVal; % alternate flipVal.
+                    newStimScanNum = bufStartScanNum + stimIdx - 1;
+                    obj.stimScanNums(end+1) = newStimScanNum;
+                    
+                    obj.stimLastEventScanNumWindow = newStimScanNum + round(obj.stimTimeWindow/sampPeriod);
+                    
+                    obj.stimWindowStartScanNums(end+1) = obj.stimLastEventScanNumWindow(1);
+                    obj.stimWindowEndScanNums(end+1) = obj.stimLastEventScanNumWindow(2);
+                    obj.stimEventTypeNames{end+1} = '';
+                    
+                    obj.stimTotalCount = obj.stimTotalCount + 1;
+                    if (obj.flipVal)
+                       fprintf('   '); 
+                    end
+                    fprintf('Detected stim! stimTotalCount: %d stimScanNum: %d stimWindowStartScanNum: %d stimWindowEndScanNum: %d bufStartScanNum: %d\n',...
+                        obj.stimTotalCount,obj.stimScanNums(end),obj.stimWindowStartScanNums(end),obj.stimWindowEndScanNums(end),bufStartScanNum);
+                end
+            end            
+            
+            %
+            % function edStoreNewSpikes(sampleIndices,stimStartIndex)
+            function edStoreNewSpikes(stimScanNums,bufStartScanNum)                 
+                scanWindowRelative = obj.spikeScanWindow(1):obj.spikeScanWindow(2);
+                try
+                     for h=1:numel(obj.neuralChanAcqList)
+                         i = obj.sglChanSubset(h)+1;
+                        %TODO: Where appropriate (e.g. most waveform display cases), short-circuit storage if not being displayed
+                        
+                        numNewSpikes = length(stimScanNums);
+                        %Update spike counts
+                        obj.spikeCount(i) = obj.spikeCount(i) + numNewSpikes;
+                        
+                        %In 'waveform' displayMode - clear all previous spike data
+                        obj.spikeData{i}.scanNums = [];
+                        obj.spikeData{i}.waveforms = cell(numNewSpikes,1);
+                                                
+                        %Store new spike scan numbers
+                        if (~isempty(stimScanNums))
+                            obj.spikeData{i}.scanNums = [obj.spikeData{i}.scanNums stimScanNums];
+                        end
+                        %stimScanNums
+                        %fprintf('length of new stimScanNums: %d\n',length(obj.spikeData{i}.scanNums));
+                  
+                        for j=1:numNewSpikes
+                            scanWindow = scanWindowRelative + stimScanNums(j);
+                            
+                            idxWindow = scanWindow - bufStartScanNum; % A scan is a sample.
+
+                            %Handle case of spikes at very start of spike-plotting
+                            if find(idxWindow < 1) %'early' spike
+                                waveform = zeros(length(idxWindow),1,'int16');
+                                waveform(idxWindow < 1) = obj.rawDataBuffer(1,h);
+                                waveform(idxWindow >= 1) = obj.rawDataBuffer(idxWindow >= 1,h);
+                                obj.spikeData{i}.waveforms{j} = waveform;
+                            else
+                                obj.spikeData{i}.waveforms{j} = obj.rawDataBuffer(idxWindow,h);
+                            end
+                        end
+                    end
+                catch ME
+                    fprintf(1,'Error: %s\n',ME.message);
+                    ME.rethrow();
+                end
+            end
+            
             
             function znstDetectStimulus(bufStartScanNum,changedFileName)
-                
                 %TODO: Remove changedFileName relevant code everywhere
                 if nargin < 2
                     changedFileName = false; %TEMP HACK
@@ -1714,10 +1822,12 @@ classdef SpikeGrid < most.Model
                 %Detect & record stimulus start and associated stimulus window
 %                stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,obj.stimStartChannel + 1) > (obj.stimStartThreshold / obj.voltsPerBitNeural)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
                 stimChanRawDataIdx = find(obj.sglChanSubset==obj.stimStartChannel);
-                stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+                % stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+                %  stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1; %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
+                triggerThreshVal = obj.stimStartThreshold / obj.voltsPerBitAux;
+                stimIdx = find((diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > triggerThreshVal) == 1,1); %Fixed - Ed
                 %fprintf('stimChanRawDataIdx: %d min data: %g max data: %g\n', stimChanRawDataIdx, min(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)), max(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)));
                 if ~isempty(stimIdx)
-                    
                     newStimScanNum = bufStartScanNum + stimIdx - 1;
                     obj.stimScanNums(end+1) = newStimScanNum;
                     
@@ -1735,8 +1845,8 @@ classdef SpikeGrid < most.Model
                     fprintf('Detected stim! stimTotalCount: %d stimScanNum: %d stimWindowStartScanNum: %d stimWindowEndScanNum: %d bufStartScanNum: %d\n',...
                         obj.stimTotalCount,obj.stimScanNums(end),obj.stimWindowStartScanNums(end),obj.stimWindowEndScanNums(end),bufStartScanNum);
                 end
-                
             end
+            
             
             function znstClassifyStimulus(bufStartScanNum)
                 
@@ -1755,7 +1865,6 @@ classdef SpikeGrid < most.Model
                         %fprintf('bufStartScanNum: %d sizeSpikeDataBuf: %s startIdx: %d endIdx: %d \n',bufStartScanNum,mat2str(size(obj.rawDataBuffer)),startIdx,endIdx);
                         
                         eventType = feval(obj.stimEventClassifyFcn,obj.rawDataBuffer(startIdx:endIdx,obj.stimEventClassifyChannel+1));
-                        
                         if isempty(eventType)
                             fprintf(2,'WARNING: Failed to classify stimulus event type!\n');
                             obj.stimEventTypeNames{stimNum} = 'unknown';
@@ -1788,15 +1897,17 @@ classdef SpikeGrid < most.Model
                 
 %                 for c=1:numNeuralChans
                 %for b=1:numel(obj.sglChanSubset) % EDKANG
-                for b=1:numel(obj.mnChanSubset)        % EDKANG         
+                for b=1:numel(obj.neuralChanAcqList)        % EDKANG         
                     c=obj.sglChanSubset(b) + 1; % EDKANG
                     
                     taggedNewSpike = false;
                     spikesToClear = [];
                     taggedSpikeIdxsStruct = taggedSpikeIdxStructInit;
-                    
+                    fprintf('b: %d    ',b);
                     %Loop through spikes from most recent backwards, tagging event-type if possible
+                    fprintf('length of spikedata: %d\n',length(obj.spikeData{c}.scanNums));
                     for spikeIdx = length(obj.spikeData{c}.scanNums):-1:1
+                        fprintf('hello!!!! %d\n',spikeIdx);
                         tmp1 =tic;
                         
                         %Reached previously-tagged spikes -- stop loop
@@ -1809,6 +1920,8 @@ classdef SpikeGrid < most.Model
                         
                         %Find associated stim spike
                         spikeScanNum = obj.spikeData{c}.scanNums(spikeIdx);
+                        
+                        fprintf('spikeScanNum: %d\n',spikeScanNum);
                         
                         stimIdx = find(spikeScanNum >= obj.stimWindowStartScanNums,1,'last');
                         
@@ -1869,13 +1982,13 @@ classdef SpikeGrid < most.Model
                 %batchLength = zeros(numDispChans,1);
                 rmsDataIdxs = {1:(size(obj.rawDataBuffer,1)-obj.spikeScanWindow(2))};
                 rmsDataIdxs = repmat(rmsDataIdxs,numNeuralChans,1);
-                
+
                 firstPassMode = isempty(newSpikeScanNums); %Handle first pass at RMS detection, when there are no detected spikes yet
-                
+
                 if ~firstPassMode
                     %for i=1:numNeuralChans
                     %for i=1:numel(obj.sglChanSubset)
-                    for i=1:numel(obj.mnChanSubset)
+                    for i=1:numel(obj.neuralChanAcqList)
                         %newRmsData{i} = obj.rawDataBuffer(1:end-obj.spikeScanWindow(2),i);
                         %batchLength(i) = length(newRmsData{i});
                         
@@ -1889,6 +2002,11 @@ classdef SpikeGrid < most.Model
                             %newRmsData{i}(spikeScanIdxs:min(end,(spikeScanIdxs+obj.spikeScanWindow(2)))) = [];
                             badIdxs = [badIdxs spikeScanIdxs(j):min(rmsDataIdxs{i}(end),spikeScanIdxs(j)+obj.spikeScanWindow(2))];
                         end
+                        
+                        % remove all negative values
+                        index = find(badIdxs>0);
+                        badIdxs = badIdxs(index);
+                        
                         rmsDataIdxs{i}(badIdxs) = [];
                     end
                 end                
@@ -1896,7 +2014,7 @@ classdef SpikeGrid < most.Model
                 % Update mean & RMS computation for each pad channel
                 warnNoData = false;
                 %for i=1:numNeuralChans
-                for i=1:numel(obj.mnChanSubset)
+                for i=1:numel(obj.neuralChanAcqList)
                     if isempty(rmsDataIdxs{i})
                         if ~warnNoData
                             warning('For at least one channel (%d), no data was available for RMS/mean calculations',i);
@@ -1948,7 +2066,7 @@ classdef SpikeGrid < most.Model
                     threshMean = obj.thresholdMean;
                 end
                 
-                [newSpikeScanNums, obj.maxNumSpikesApplied] = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,threshMean,obj.refreshPeriodMaxNumSpikes,obj.sglChanSubset,obj.mnChanSubset); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+                [newSpikeScanNums, obj.maxNumSpikesApplied] = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,threshMean,obj.refreshPeriodMaxNumSpikes,obj.sglChanSubset,obj.neuralChanAcqList); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
                 
                 %
                 %             if maxNumSpikesApplied && ~obj.maxNumSpikesApplied
@@ -1960,7 +2078,7 @@ classdef SpikeGrid < most.Model
             else
                 threshVal = obj.thresholdVal / obj.voltsPerBitNeural; %Convert to AD units
                 threshMean = 0; %Don't do mean subtraction
-                newSpikeScanNums = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,0,obj.refreshPeriodMaxNumSpikes,obj.sglChanSubset,obj.mnChanSubset); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+                newSpikeScanNums = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,0,obj.refreshPeriodMaxNumSpikes,obj.sglChanSubset,obj.neuralChanAcqList); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
             end            
 
         end
@@ -2144,7 +2262,7 @@ classdef SpikeGrid < most.Model
 
                 numNewSpikes = length(obj.spikeData{i}.scanNums);
                 totalNewSpikes = totalNewSpikes + numNewSpikes;
-                                       
+
                 %Plot new spike lines
                 spikeScanWindowLength = diff(obj.spikeScanWindow)+1;
                 xData = linspace(obj.spikeTimeWindow(1),obj.spikeTimeWindow(2),spikeScanWindowLength)';
@@ -2186,7 +2304,6 @@ classdef SpikeGrid < most.Model
                                 waveform = (double(waveform) - obj.thresholdMean(i)) / obj.thresholdRMS(i);
                             end
                     end
-                                    
                     %Update line object with waveform for current spike
                     obj.hSpikeLines(plotIdx).addpoints(vertcat(xData, NaN),vertcat(waveform, NaN)); % old
                     obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;
@@ -2517,7 +2634,8 @@ classdef SpikeGrid < most.Model
                 %TODO: Apply subsetting correctly
             end
             
-            obj.neuralChanDispList = obj.neuralChanDispOrder;
+            obj.neuralChanAcqList = intersect(obj.sglChanSubset,obj.neuralChansAvailable);
+            obj.neuralChanDispList = obj.neuralChanDispOrder; %TODO: Apply subsetting to neuralChanDispOrder
             obj.auxChanProcList = [obj.analogMuxChansAvailable obj.analogSoloChansAvailable];
         end
         
@@ -2551,7 +2669,6 @@ end
 
 
 %% LOCAL FUNCTIONS
-
 function [newSpikeScanNums, maxNumSpikesApplied] = zlclDetectSpikes(spikeData,rawDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,thresholdMean,maxNumSpikes,sglChanSubset,chanSubset)
 %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
 %
@@ -2566,7 +2683,6 @@ function [newSpikeScanNums, maxNumSpikesApplied] = zlclDetectSpikes(spikeData,ra
 %
 % NOTES:
 %  VI050812: Not clear that recentSpikeScanNums can ever be non-empty -- might be able to get rid of this logic (and spikeData argument) altogether?           
-
 maxNumSpikesApplied = false;
 numNeuralChans = length(spikeData);
 newSpikeScanNums = cell(numNeuralChans,1);
@@ -2647,8 +2763,8 @@ s.running = struct('Classes','binaryflex','Attributes','scalar');
 s.gatingChannel = struct('Attributes',{{'integer' 'finite' 'nonnegative'}},'AllowEmpty',1);
 s.stimStartChannel = struct('Attributes',{{'integer' 'finite' 'nonnegative'}},'AllowEmpty',1);
 
-s.displayMode = struct('Options',{{'waveform' 'raster'}});
-s.tabDisplayed = struct('Attributes',{{'scalar' 'finite' 'positive' 'integer'}});
+s.displayMode   = struct('Options',{{'waveform' 'raster'}});
+s.tabDisplayed  = struct('Attributes',{{'scalar' 'finite' 'positive' 'integer'}});
 
 s.thresholdType = struct('Options',{{'volts' 'rmsMultiple'}});
 s.thresholdVal = struct('Attributes',{{'scalar' 'nonempty' 'finite'}});
