@@ -1,8 +1,8 @@
 % SYNOPSIS
 % --------
 %
-% The @SpikeGL class is a Matlab object with methods to access the
-% SpikeGLX program via TCP/IP. SpikeGLX and Matlab can run on the
+% The @SpikeGL class is a MATLAB object with methods to access the
+% SpikeGLX program via TCP/IP. SpikeGLX and MATLAB can run on the
 % same machine (transparently via a loopback socket) or across a
 % network.
 %
@@ -17,7 +17,7 @@
 %
 % The network socket handle is used with the 'CalinsNetMex' mexFunction,
 % which is a helper mexFunction that does all the actual socket
-% communications for this class (since Matlab lacks native network
+% communications for this class (since MATLAB lacks native network
 % support).
 %
 % Users of this class merely need to construct an instance of a @SpikeGL
@@ -53,7 +53,7 @@
 %    myobj = Close( myobj )
 %
 %                Close the network connection to SpikeGLX and release
-%                associated Matlab resources.
+%                associated MATLAB resources.
 %
 %    myobj = ConsoleHide( myobj )
 %
@@ -72,19 +72,20 @@
 %                Returns a vector containing the counts of 16-bit
 %                words of each class being acquired {AP,LF,SY,MN,MA,XA,DW}.
 %
-%    channelSubset = GetSaveChansNi( myobj ),
-%                    GetSaveChansIm( myobj )
+%    channelSubset = GetSaveChansIm( myobj ),
+%                    GetSaveChansNi( myobj )
 %
 %                Returns a vector containing the indices of
 %                channels being saved.
 %
-%    daqData = FetchNi( myObj, start_scan, scan_ct, channel_subset, downsample_factor ),
-%              FetchIm( myObj, start_scan, scan_ct, channel_subset, downsample_factor )
+%    [daqData,headCt] = FetchIm( myObj, start_scan, scan_ct, channel_subset, downsample_factor ),
+%                       FetchNi( myObj, start_scan, scan_ct, channel_subset, downsample_factor )
 %
 %                Get MxN matrix of stream data.
 %                M = scan_ct = max samples to fetch.
 %                N = channel count...
-%                If channel_subset is not specified, N = all.
+%                    If channel_subset is not specified, N = current
+%                    SpikeGLX save-channel subset.
 %                Fetching starts at index start_scan.
 %                Data are int16 type.
 %
@@ -92,15 +93,18 @@
 %
 %                Also returns headCt = index of first timepoint in matrix.
 %
-%    daqData = FetchLatestNi( myObj, NUM, channel_subset, downsample_ratio ),
-%              FetchLatestIm( myObj, NUM, channel_subset, downsample_ratio )
+%    [daqData,headCt] = FetchLatestIm( myObj, NUM, channel_subset, downsample_ratio ),
+%                       FetchLatestNi( myObj, NUM, channel_subset, downsample_ratio )
 %
 %                Get MxN matrix of the most recent stream data.
 %                M = NUM = max samples to fetch.
 %                N = channel count...
-%                If channel_subset is not specified, N = all.
+%                    If channel_subset is not specified, N = current
+%                    SpikeGLX save-channel subset.
 %
 %                downsample_ratio is an integer (default = 1).
+%
+%                Also returns headCt = index of first timepoint in matrix.
 %
 %    params = GetParams( myobj )
 %
@@ -115,11 +119,17 @@
 %
 %                Get run base name.
 %
-%    scanCount = GetScanCountNi( myobj ),
-%                GetScanCountIm( myobj )
+%    scanCount = GetScanCountIm( myobj ),
+%                GetScanCountNi( myobj )
 %
 %                Returns number of scans since current run started
 %                or zero if not running.
+%
+%    startCt = GetFileStartCountIm( myobj ),
+%              GetFileStartCountNi( myobj )
+%
+%                Returns index of first scan in latest file,
+%                or zero if not available.
 %
 %    time = GetTime( myobj )
 %
@@ -150,6 +160,11 @@
 %
 %                Returns 1 if the software is currently running
 %                AND saving data.
+%
+%    boolval = IsUserOrderIm( myobj ),
+%              IsUserOrderNi( myobj )
+%
+%                Returns 1 if graphs currently sorted in user order.
 %
 %    res = Par2( myobj, op, filename )
 %
@@ -187,6 +202,11 @@
 %                name/value pairs. The call will fail with an error if a
 %                run is currently in progress.
 %
+%    myobj = SetRecordingEnable( myobj, bool_flag )
+%
+%                Set triggering (file writing) on/off for current run.
+%                This command has no effect if not running.
+%
 %    myobj = SetRunDir( myobj, dir )
 %
 %                Set global run data directory.
@@ -195,11 +215,6 @@
 %
 %                Set the run name for the next time files are created
 %                (either by SetTrgEnable() or by StartRun()).
-%
-%    myobj = SetTrgEnable( myobj, bool_flag )
-%
-%                Set triggering (file writing) on/off for current run.
-%                This command has no effect if not running.
 %
 %    myobj = StartRun( myobj)
 %    myobj = StartRun( myobj, params )
@@ -223,5 +238,5 @@
 %                relative to the run dir. Absolute filenames (starting
 %                with a '/') are supported as well. Since this is a long
 %                operation, this functions uses the 'disp' command to print
-%                progress information to the matlab console. The returned
+%                progress information to the MATLAB console. The returned
 %                value is 1 if verified, 0 otherwise.
