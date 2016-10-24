@@ -151,7 +151,10 @@ classdef SpikeGrid < most.Model
         %thresholdRMSNumSamples;
         
         bufScanNumEnd; %Scan number of the last element in the rawDataBuffer
-        rawDataBuffer; %Array to cache raw channel data to process during each timer cycle. Grows & contracts each cycle. 
+        rawDataBuffer; %Array to cache raw channel data to process during each timer cycle. Grows & contracts each cycle.
+        overflowBuffer; %Array to cache raw channel data from previous timer cycle. This is used for the stimulus detection case where a stimulus
+                        %detection window lies outside of the range of the
+                        %rawDataBuffer.
         
         gatedScans; %Empty array, if no gating window is active, or 1x2 array specifying [start stop] scan numbers, inclusive during which spikes should be plotted
         
@@ -993,7 +996,6 @@ classdef SpikeGrid < most.Model
                 return;
             end
             
-            
             %             %Update filename on all start() calls -- handles 1) SpikeGL restart and 2)start & retrigger mode cases
             %             obj.hSpoke.updateFileName();
             
@@ -1644,6 +1646,8 @@ classdef SpikeGrid < most.Model
             return;
             
             function bufStartScanNum = znstAugmentRawDataBuffer(scansToRead, newData)
+                fprintf('augmentRawDataBuffer! scansToRead: %d\n', scansToRead);
+                fprintf('newdata size: %d\n', size(newData,1));
                 assert(ismember(size(obj.rawDataBuffer,1),[0 diff(obj.spikeScanWindow)+1 obj.stimEventClassifyNumScans - 1]),'Expected rawDataBuffer to be empty or exactly equal to size of spike window');
 
                 %         if obj.bufScanNumEnd == 0
@@ -1654,7 +1658,9 @@ classdef SpikeGrid < most.Model
                 obj.bufScanNumEnd = obj.maxReadableScanNum;
                 bufStartScanNum = obj.bufScanNumEnd - scansToRead - size(obj.rawDataBuffer,1); %Start index of rawDataBuffer (including previously read samples carried over from last timer batch, the last post-window worth not yet processed)
                 
+                fprintf('before augment: rawdatabuffer size: %d\n', size(obj.rawDataBuffer,1));
                 obj.rawDataBuffer = [obj.rawDataBuffer; newData];
+                fprintf('after augment: rawdatabuffer size: %d\n', size(obj.rawDataBuffer,1));
             end
             
             
@@ -1762,6 +1768,8 @@ classdef SpikeGrid < most.Model
             % function edStoreNewSpikes(sampleIndices,stimStartIndex)
             function edStoreNewSpikes(stimScanNums,bufStartScanNum)                 
                 scanWindowRelative = obj.spikeScanWindow(1):obj.spikeScanWindow(2);
+                once = true;
+
                 try
                      for h=1:numel(obj.neuralChanAcqList)
                          i = obj.sglChanSubset(h)+1;
@@ -1794,7 +1802,33 @@ classdef SpikeGrid < most.Model
                                 waveform(idxWindow >= 1) = obj.rawDataBuffer(idxWindow >= 1,h);
                                 obj.spikeData{i}.waveforms{j} = waveform;
                             else
-                                obj.spikeData{i}.waveforms{j} = obj.rawDataBuffer(idxWindow,h);
+                                if once
+                                    size(obj.spikeData)
+                                    size(obj.rawDataBuffer)
+                                    fprintf('i limit: %d, j limit: %d, h limit: %d, idxWindow: %d\n', ...
+                                        obj.sglChanSubset(numel(obj.neuralChanAcqList))+1, numNewSpikes, numel(obj.neuralChanAcqList));
+                                    idxWindowMin = scanWindowRelative + stimScanNums(1) - bufStartScanNum;
+                                    idxWindowMax = scanWindowRelative + stimScanNums(numNewSpikes) - bufStartScanNum;
+                                    fprintf('idxWindow min(1): %d, idxWindow min(end): %d\n', ...
+                                        idxWindowMin(1) , idxWindowMin(end) );
+                                    fprintf('idxWindow max(1): %d, idxWindow max(end): %d\n', ...
+                                        idxWindowMax(1) , idxWindowMax(end) );
+                                    once = false;
+                                end
+                                % Account for the case where idxWindow max
+                                % exceeds the size of rawDataBuffer.
+                                if (idxWindowMax(end) <= size(obj.rawDataBuffer,1))
+                                    obj.spikeData{i}.waveforms{j} = obj.rawDataBuffer(idxWindow,h);
+                                else
+                                    % It looks like the window bounds are
+                                    % identical for all the channels, so we
+                                    % can keep a single index for the
+                                    % extended window.                                    
+                                    fprintf('spike #%d out of bounds, channel #%d, idxWindow min(1): %d, idxWindow min(end): %d, idxWindow max(1): %d, idxWindow max(end): %d\n', ...
+                                        j, i, idxWindowMin(1), idxWindowMin(end), idxWindowMax(1), idxWindowMin(end) );
+                                    %fprintf('bufStartScanNum: %d, new begin offset: %d, additional army required: %d\n', bufStartScanNum, idxWindowMax(1), idxWindowMax(end) - size(obj.rawDataBuffer,1));
+                                    obj.spikeScanWindow
+                                end
                             end
                         end
                     end
