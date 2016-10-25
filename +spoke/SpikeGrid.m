@@ -202,7 +202,7 @@ classdef SpikeGrid < most.Model
     end
     
     properties (Hidden, Dependent)
-        spikeScanWindow; %horizontalRange in 'scan' units, which correspond to A/D 'scans' (a sample for each channel). Note that the window includes this # of pre & post scan, PLUS one additional scan for the spike itself
+        horizontalRangeScans; %horizontalRange in 'scan' units, which correspond to A/D 'scans' (a sample for each channel). Note that the window includes this # of pre & post scan, PLUS one additional scan for the spike itself
         
         thresholdRMSScanRefreshPeriod; %thresholdRMSRefreshPeriod in scan units
         
@@ -560,7 +560,7 @@ classdef SpikeGrid < most.Model
             obj.refreshPeriodMaxSpikeRate = currMaxSpikeRate;
         end
         
-        function val = get.spikeScanWindow(obj)
+        function val = get.horizontalRangeScans(obj)
             val = round(obj.horizontalRange * obj.sglParamCache.niSampRate);
         end
         
@@ -1450,7 +1450,7 @@ classdef SpikeGrid < most.Model
                 t3 = toc(t0);
                 				
 				%Detect spike(s) within data buffer, except for final spike-window 'post' time
-				if size(obj.rawDataBuffer,1) < (obj.spikeScanWindow(2) + 2)
+				if size(obj.rawDataBuffer,1) < (obj.horizontalRangeScans(2) + 2)
 					return;
                 end
                 
@@ -1533,7 +1533,7 @@ classdef SpikeGrid < most.Model
                         obj.rawDataBuffer(1:end-max(1,obj.stimEventClassifyNumScans)+1,:) = [];
                     else
                         %Waveform mode: leave only one full horizontalRange (pre+post+1 sample) at the end
-                        obj.rawDataBuffer(1:end-(diff(obj.spikeScanWindow)+1),:) = [];
+                        obj.rawDataBuffer(1:end-(diff(obj.horizontalRangeScans)+1),:) = [];
                     end
                 catch ME
                     fprintf(2,'Error contracting the data buffer, which has size: %s\n',mat2str(size(obj.rawDataBuffer)));
@@ -1592,7 +1592,7 @@ classdef SpikeGrid < most.Model
             function bufStartScanNum = znstAugmentRawDataBuffer(scansToRead, newData)
                 %dfprintf('augmentRawDataBuffer! scansToRead: %d\n', scansToRead);
                 %dfprintf('newdata size: %d\n', size(newData,1));
-                assert(ismember(size(obj.rawDataBuffer,1),[0 diff(obj.spikeScanWindow)+1 obj.stimEventClassifyNumScans - 1]),'Expected rawDataBuffer to be empty or exactly equal to size of spike window');
+                assert(ismember(size(obj.rawDataBuffer,1),[0 diff(obj.horizontalRangeScans)+1 obj.stimEventClassifyNumScans - 1]),'Expected rawDataBuffer to be empty or exactly equal to size of spike window');
 
                 %         if obj.bufScanNumEnd == 0
                 %         else
@@ -1616,7 +1616,7 @@ classdef SpikeGrid < most.Model
                 %spike-triggered waveform mode
                                
                 
-                scanWindowRelative = obj.spikeScanWindow(1):obj.spikeScanWindow(2);
+                scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
                 waveformDisplay = strcmpi(obj.displayMode,'waveform');
 
                 if stimulusTriggeredWaveformMode
@@ -1743,7 +1743,7 @@ classdef SpikeGrid < most.Model
 %             %
 %             % function edStoreNewSpikes(sampleIndices,stimStartIndex)
 %             function edStoreNewSpikes(stimScanNum,bufStartScanNum)
-%                 scanWindowRelative = obj.spikeScanWindow(1):obj.spikeScanWindow(2);
+%                 scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
 %                 once = true;
 %                 assert(stimScanNum <= 1 && stimulusTriggeredWaveformMode, 'Unexpectedly detected more than one stimulus in stimulus triggered waveform mode.');
 %                 try
@@ -1975,7 +1975,7 @@ classdef SpikeGrid < most.Model
                 
                 %newRmsData = cell(numDispChans,1);
                 %batchLength = zeros(numDispChans,1);
-                rmsDataIdxs = {1:(size(obj.rawDataBuffer,1)-obj.spikeScanWindow(2))};
+                rmsDataIdxs = {1:(size(obj.rawDataBuffer,1)-obj.horizontalRangeScans(2))};
                 rmsDataIdxs = repmat(rmsDataIdxs,numNeuralChans,1);
 
                 firstPassMode = isempty(newSpikeScanNums); %Handle first pass at RMS detection, when there are no detected spikes yet
@@ -1984,18 +1984,18 @@ classdef SpikeGrid < most.Model
                     %for i=1:numNeuralChans
                     %for i=1:numel(obj.sglChanSubset)
                     for i=1:numel(obj.neuralChanAcqList)
-                        %newRmsData{i} = obj.rawDataBuffer(1:end-obj.spikeScanWindow(2),i);
+                        %newRmsData{i} = obj.rawDataBuffer(1:end-obj.horizontalRangeScans(2),i);
                         %batchLength(i) = length(newRmsData{i});
                         
-                        %rmsDataIdxs{i} = 1:(size(obj.rawDataBuffer,1)-obj.spikeScanWindow(2));
+                        %rmsDataIdxs{i} = 1:(size(obj.rawDataBuffer,1)-obj.horizontalRangeScans(2));
                         
                         spikeScanIdxs = newSpikeScanNums{i} - bufStartScanNum + 1;  %Convert scan numbers to spike-data-buffer indices
                         
                         %Exclude just-detected spike windows
                         badIdxs = [];
                         for j=1:length(spikeScanIdxs)
-                            %newRmsData{i}(spikeScanIdxs:min(end,(spikeScanIdxs+obj.spikeScanWindow(2)))) = [];
-                            badIdxs = [badIdxs spikeScanIdxs(j):min(rmsDataIdxs{i}(end),spikeScanIdxs(j)+obj.spikeScanWindow(2))];
+                            %newRmsData{i}(spikeScanIdxs:min(end,(spikeScanIdxs+obj.horizontalRangeScans(2)))) = [];
+                            badIdxs = [badIdxs spikeScanIdxs(j):min(rmsDataIdxs{i}(end),spikeScanIdxs(j)+obj.horizontalRangeScans(2))];
                         end
                         
                         % remove all negative values
@@ -2259,8 +2259,8 @@ classdef SpikeGrid < most.Model
                 totalNewSpikes = totalNewSpikes + numNewSpikes;
 
                 %Plot new spike lines
-                spikeScanWindowLength = diff(obj.spikeScanWindow)+1;
-                xData = linspace(obj.horizontalRange(1),obj.horizontalRange(2),spikeScanWindowLength)';
+                horizontalRangeScansLength = diff(obj.horizontalRangeScans)+1;
+                xData = linspace(obj.horizontalRange(1),obj.horizontalRange(2),horizontalRangeScansLength)';
                 
                 newSpikeCounts = obj.lastPlottedSpikeCount(i) + (1:numNewSpikes);                
                 lineIdxs = mod(newSpikeCounts,obj.spikesPerPlot) + 1; %The line object indices to use for these newly detected spikes
