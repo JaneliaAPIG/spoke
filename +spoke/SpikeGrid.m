@@ -13,11 +13,7 @@ classdef SpikeGrid < most.Model
         thresholdAbsolute = false; % Logical indicating whether threshold should be considered an absolute value
         thresholdRMSRefreshPeriod = 2; %Period, in seconds, at which RMS value is recomputed for 'rmsMultiple' threshold detection
         thresholdRMSRefreshOnRetrigger = true; %Logical indicating whether RMS value should be recomputed on SpikeGL 'retriggers' (applies for 'rmsMultiple' threshold detection)
-        
-        gatingChannel = []; %Channel number (zero-indexed) to use as gate signal. This is /always/ an auxiliary, non-pad channel.
-        gatingThreshold = 0; %Value, in volts, to use for gating signal (TODO: Implement in volts -- it's in A/D units at moment)
-        gatingDuration = 200; %Time, in seconds, to plot for each gate signal threshold-crossing
-        
+               
         globalMeanSubtraction = false; %Logical indicating whether to compute/apply global mean subtraction
         
         dataReadMode = 'file'; %One of {'file' 'spikeGL'}. Specifies whether to read data from file (faster, but assumes only one file) or via spikeGL function.
@@ -156,8 +152,7 @@ classdef SpikeGrid < most.Model
                         %detection window lies outside of the range of the
                         %rawDataBuffer.
         
-        gatedScans; %Empty array, if no gating window is active, or 1x2 array specifying [start stop] scan numbers, inclusive during which spikes should be plotted
-        
+       
         voltsPerBitAux; %Scaling factor between A/D values and voltage for Auxiliary Channels
         voltsPerBitNeural; %Scaling factor between A/D values and voltage for Neural Channels
         
@@ -448,23 +443,7 @@ classdef SpikeGrid < most.Model
             
         end
         
-        function set.gatingChannel(obj,val)
-            obj.zprpAssertNotRunning('gatingChannel');
-            obj.validatePropArg('gatingChannel',val);
-            obj.zprpAssertAuxChan(val,'gatingChannel'); %Assert any gating channel specified is a valid auxiliary channel
-            obj.gatingChannel = val;
-        end
-        
-        function set.gatingThreshold(obj,val)
-            obj.validatePropArg('gatingThreshold',val);
-            obj.gatingThreshold = val;
-        end
-        
-        function set.gatingDuration(obj,val)
-            obj.validatePropArg('gatingDuration',val);
-            obj.gatingDuration = val;
-        end
-        
+
         function set.globalMeanSubtraction(obj,val)
             obj.validatePropArg('globalMeanSubtraction',val);
             obj.globalMeanSubtraction = val;
@@ -1488,61 +1467,8 @@ classdef SpikeGrid < most.Model
                 if ~stimulusTriggeredWaveformMode %If stimulus triggered waveform, store all waveforms as spikes.
                     if isempty(newSpikeScanNums)
                         %no-op
-                    elseif isempty(obj.gatingChannel) || rasterDisplayMode %At moment, gating is not supported in combination with raster mode
-                        %Store all new spikes
+                    else
                         znstStoreNewWaveforms(newSpikeScanNums,bufStartScanNum); %TODO: Give this a different function & function name for raster mode. There is no waveform storage
-                    else %gating
-
-                        %Store only those new spikes that fall within a gating window
-                        rawDataBufferStartIdx = 1;
-                        spikesToStore = cell(numNeuralChans,1);
-
-                        while any(cellfun(@(x)~isempty(x),newSpikeScanNums)) %Some detected spikes remain on at least one channel
-                            if ~isempty(obj.gatedScans) %A gating window has been previously computed
-
-                                rawDataBufferStartIdx = obj.gatedScans(2) + 1; %Subsequent searches now begin after the gating window
-
-                                %for i=1:numNeuralChans
-                                for h=1:numel(obj.neuralChanAcqList)
-                                    i = obj.sglChanSubset(h) + 1;
-                                    %fprintf('i = %d, numNewSpikes = %d, numel(newSpikeScanNums) = %d\n',i,numNewSpikes,numel(newSpikeScanNums));
-
-                                    if isempty(newSpikeScanNums{i})
-                                        continue;
-                                    end
-
-                                    idxs = find(newSpikeScanNums{i} >= obj.gatedScans(1)  & newSpikeScanNums{i} <= obj.gatedScans(2)); %Find idxs into spikeScanNum arrays containing scan numbers within the gating window
-
-                                    if isempty(idxs)
-                                        continue;
-                                    end
-
-                                    spikesToStore{i} = newSpikeScanNums{i}(idxs);
-
-                                    newSpikeScanNums{i}(1:idxs(end)) = []; %Clear all detected spikes up through the last spike detected within gate for this channel
-
-                                end
-
-                                obj.gatedScans = []; %Done processing spikes with the last gate's scans
-
-                            elseif rawDataBufferStartIdx > length(obj.rawDataBuffer) % Have traversed the full rawDataBuffer -- all the spikes flagged within a gate should already be stored
-                                break;
-                            else
-                                %Detect first threshold-crossing on gating channel for remainder of scan window
-                                crossIdx = rawDataBufferStartIdx + find(diff(obj.rawDataBuffer(rawDataBufferStartIdx:end,obj.gatingChannel + 1) > obj.gatingThreshold) == 1, 1); %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
-
-                                if isempty(crossIdx) %no threshold crosngs on gate channel detected
-                                    break;
-                                else
-                                    obj.gatedScans(1) = crossIdx + bufStartScanNum - 1; %Should not be off-by-one -- crossIdx indicates which element starting from bufStartScanNum has crossing. If it's second element (earliest posible), then gate starts at bufStartScanNum+1
-                                    obj.gatedScans(2) = obj.gatedScans(1) + round(obj.gatingDuration / sampPeriod) - 1;
-                                end
-
-                            end
-
-                        end
-
-                        znstStoreNewSpikeWaveforms(spikesToStore,bufStartScanNum);
                     end
                 end
                 t5 = toc(t0);
@@ -2811,7 +2737,6 @@ function s = zlclInitPropAttributes()
 s.running = struct('Classes','binaryflex','Attributes','scalar');
 
 %s.numAuxChans = struct();
-s.gatingChannel = struct('Attributes',{{'integer' 'finite' 'nonnegative'}},'AllowEmpty',1);
 s.stimStartChannel = struct('Attributes',{{'integer' 'finite' 'nonnegative'}},'AllowEmpty',1);
 
 s.displayMode   = struct('Options',{{'waveform' 'raster'}});
@@ -2829,8 +2754,6 @@ s.verticalRange = struct('Attributes',{{'numel' 2 'finite'}});
 
 s.spikeAmpUnits = struct('Options',{{'volts' 'rmsMultiple'}});
 
-s.gatingThreshold = struct('Attributes',{{'scalar' 'finite'}});
-s.gatingDuration = struct('Attributes',{{'scalar' 'finite'}});
 
 s.spikesPerPlot = struct('Attributes',{{'scalar' 'finite' 'positive'}});
 s.spikesPerPlotClearMode = struct('Options',{{'all' 'oldest'}});
