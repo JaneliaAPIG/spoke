@@ -1396,7 +1396,7 @@ classdef SpikeGrid < most.Model
                     assert(false);
                 end
                 
-                fprintf('obj.maxReadableScanNum: %d     obj.lastMaxReadableScanNum: %d\n',obj.maxReadableScanNum,obj.lastMaxReadableScanNum);
+                %dfprintf('obj.maxReadableScanNum: %d     obj.lastMaxReadableScanNum: %d\n',obj.maxReadableScanNum,obj.lastMaxReadableScanNum);
                 scansToRead_ = obj.maxReadableScanNum - obj.lastMaxReadableScanNum;
                 
                 meanScansPerTimerTick = sampRate / obj.refreshRate; 
@@ -1504,7 +1504,7 @@ classdef SpikeGrid < most.Model
                                 %for i=1:numNeuralChans
                                 for h=1:numel(obj.neuralChanAcqList)
                                     i = obj.sglChanSubset(h) + 1;
-                                    fprintf('i = %d, numNewSpikes = %d, numel(newSpikeScanNums) = %d\n',i,numNewSpikes,numel(newSpikeScanNums));
+                                    %fprintf('i = %d, numNewSpikes = %d, numel(newSpikeScanNums) = %d\n',i,numNewSpikes,numel(newSpikeScanNums));
 
                                     if isempty(newSpikeScanNums{i})
                                         continue;
@@ -1649,8 +1649,8 @@ classdef SpikeGrid < most.Model
             return;
             
             function bufStartScanNum = znstAugmentRawDataBuffer(scansToRead, newData)
-                fprintf('augmentRawDataBuffer! scansToRead: %d\n', scansToRead);
-                fprintf('newdata size: %d\n', size(newData,1));
+                %dfprintf('augmentRawDataBuffer! scansToRead: %d\n', scansToRead);
+                %dfprintf('newdata size: %d\n', size(newData,1));
                 assert(ismember(size(obj.rawDataBuffer,1),[0 diff(obj.spikeScanWindow)+1 obj.stimEventClassifyNumScans - 1]),'Expected rawDataBuffer to be empty or exactly equal to size of spike window');
 
                 %         if obj.bufScanNumEnd == 0
@@ -1661,9 +1661,9 @@ classdef SpikeGrid < most.Model
                 obj.bufScanNumEnd = obj.maxReadableScanNum;
                 bufStartScanNum = obj.bufScanNumEnd - scansToRead - size(obj.rawDataBuffer,1); %Start index of rawDataBuffer (including previously read samples carried over from last timer batch, the last post-window worth not yet processed)
                 
-                fprintf('before augment: rawdatabuffer size: %d\n', size(obj.rawDataBuffer,1));
+                %dfprintf('before augment: rawdatabuffer size: %d\n', size(obj.rawDataBuffer,1));
                 obj.rawDataBuffer = [obj.rawDataBuffer; newData];
-                fprintf('after augment: rawdatabuffer size: %d\n', size(obj.rawDataBuffer,1));
+                %dfprintf('after augment: rawdatabuffer size: %d\n', size(obj.rawDataBuffer,1));
             end
             
             
@@ -1859,7 +1859,7 @@ classdef SpikeGrid < most.Model
                 %  stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1; %Should not have off-by-one error -- lowest possible value is rawDataBufferStartIdx+1 (if the second sample crosses threshold)
                 triggerThreshVal = obj.stimStartThreshold / obj.voltsPerBitAux;
                 stimIdx = find((diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > triggerThreshVal) == 1,1); %Fixed - Ed
-                %fprintf('stimChanRawDataIdx: %d min data: %g max data: %g\n', stimChanRawDataIdx, min(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)), max(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)));
+                %dfprintf('stimChanRawDataIdx: %d min data: %g max data: %g\n', stimChanRawDataIdx, min(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)), max(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)));
                 if ~isempty(stimIdx)
                     newStimScanNum = bufStartScanNum + stimIdx - 1;
                     obj.stimScanNums(end+1) = newStimScanNum;
@@ -1871,7 +1871,7 @@ classdef SpikeGrid < most.Model
                     obj.stimEventTypeNames{end+1} = '';
                     
                     obj.stimTotalCount = obj.stimTotalCount + 1;
-                    fprintf('Detected stim! stimTotalCount: %d stimScanNum: %d stimWindowStartScanNum: %d stimWindowEndScanNum: %d bufStartScanNum: %d\n',...
+                    dfprintf('Detected stim! stimTotalCount: %d stimScanNum: %d stimWindowStartScanNum: %d stimWindowEndScanNum: %d bufStartScanNum: %d\n',...
                         obj.stimTotalCount,obj.stimScanNums(end),obj.stimWindowStartScanNums(end),obj.stimWindowEndScanNums(end),bufStartScanNum);
                 end
             end
@@ -2833,4 +2833,8 @@ s.psthTimeBin = struct('Attributes',{{'nonnegative' 'scalar' 'finite'}});
 s.psthAmpRange = struct('Attributes',{{'nonnegative' 'finite' 'numel' 2}});
 s.psthTimerPeriod = struct('Attributes',{{'positive' 'scalar'}});
 
+end
+
+function dfprintf(varargin)
+fprintf(varargin{:});
 end
