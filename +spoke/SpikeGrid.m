@@ -544,6 +544,11 @@ classdef SpikeGrid < most.Model
             obj.zprpAssertNotRunning('refreshRate');
             obj.validatePropArg('refreshRate',val);
             
+            %Ensure value does not exceed the processing refresh period
+            hrng = diff(obj.horizontalRange);
+            f_samp = obj.sglParamCache.niSampRate;            
+            assert(ceil(hrng * f_samp) < floor(f_samp/val),'horizontalRange must be shorter than the processing refresh period');
+                        
             refreshPeriodRounded = round(1e3 * 1/val) * 1e-3; %Make an integer number of milliseconds
             set(obj.hTimer,'Period',refreshPeriodRounded);
             
@@ -648,8 +653,17 @@ classdef SpikeGrid < most.Model
             obj.zprpAssertNotRunning('horizontalRange');
             obj.validatePropArg('horizontalRange',val);
             
-            set(obj.hPlots,'XLim',val);
+            %Ensure value does not exceed processing refresh period
+            dval = diff(val);
+            f_samp = obj.sglParamCache.niSampRate;
+            assert(dval > 0,'Horizontal range must be specified from minimum to maximum');
+            assert(ceil(dval * f_samp) < floor(f_samp/obj.refreshRate),'horizontalRange must be shorter than the processing refresh period');
+            
             obj.horizontalRange = val;
+            
+            %Side-effects
+            set(obj.hPlots,'XLim',val);
+
         end
         
         function val = get.maxPointsPerAnimatedLine(obj)
