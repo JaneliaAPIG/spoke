@@ -354,11 +354,11 @@ function s = lclInitPropBindings()
 
     
   %frequently-adjusted property table bindings
-  s.spikeAmpWindow = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','char'));
-  s.spikeTimeWindow = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','char'));
+  s.verticalRange = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','char'));
+  s.horizontalRange = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','char'));
   s.spikesPerPlot = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','numeric'));
 
-  s.stimNumDisplayRange = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','numeric'));
+  s.verticalRangeRaster = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','numeric'));
 
   s.refreshPeriodMaxSpikeRate = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','numeric'));
   s.refreshRate = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','numeric'));
@@ -375,7 +375,7 @@ function s = lclInitPropBindings()
   
   s.stimStartThreshold = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
   s.stimTimeWindow = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
-  s.stimNumDisplayRangeInfIncrement = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
+  s.verticalRangeRasterInfIncrement = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
 
   s.spikesPerPlotClearMode = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','char'));
   

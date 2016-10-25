@@ -29,9 +29,9 @@ classdef SpikeGrid < most.Model
         displayMode = 'waveform'; %One of {'waveform' 'raster'}. Specifies type of information to display on plot grid.
         
         %Spike waveform display properties
-        spikeTimeWindow = [-1 2] * 1e-3; %2 element vector ([pre post]) indicating times, in seconds, to display before and after threshold crossing
+        horizontalRange = [-1 2] * 1e-3; %2 element vector ([pre post]) indicating times, in seconds, to display before and after threshold crossing
         spikeAmpUnits = 'volts'; %One of {'volts' 'rmsMultiple'} indicating units to use for spike plot display. Value of 'rmsMultiple' only available if thresholdType='rmsMultiple'
-        %spikeAmpWindow = [-4000 4000];
+        %verticalRange = [-4000 4000];
         
         spikesPerPlot = 100; %Number of sweeps to display in each grid figure
         spikesPerPlotClearMode = 'all'; %One of {'all' 'oldest'}
@@ -41,11 +41,11 @@ classdef SpikeGrid < most.Model
         stimStartChannel = []; %Channel number (zero-indexed) to use for signaling start of stim
         stimStartThreshold = 0.5; %Value, in volts, to use for stim start signal
         stimTimeWindow = [-1 1]; %2 element vector ([pre post]) indicating times, in seconds, to display before and after stim start threshold crossing in raster/psth plots
-        stimNumDisplayRange = [1 inf]; %2 element vector indicating which stim numbers to display, counted from last start/reset. Set second element to Inf to specify all stimuli should be displayed.
-        stimNumDisplayRangeInfIncrement = 20; %When stimNumDisplayRange(2)=Inf, specify the increment in which the number of stimuli displayed are incremented by.
+        verticalRangeRaster = [1 inf]; %2 element vector indicating which stim numbers to display, counted from last start/reset. Set second element to Inf to specify all stimuli should be displayed.
+        verticalRangeRasterInfIncrement = 20; %When verticalRangeRaster(2)=Inf, specify the increment in which the number of stimuli displayed are incremented by.
         stimEventTypesDisplayed = {}; %String or string cell array indicating which event type(s) to display raster/PSTH data for.
         
-        spikeRefractoryPeriod = 2e-3; %Time, in seconds, to prevent detection of spike following previously detected spike. When displayMode='waveform', this value is given by second element of spikeTimeWindow.
+        spikeRefractoryPeriod = 2e-3; %Time, in seconds, to prevent detection of spike following previously detected spike. When displayMode='waveform', this value is given by second element of horizontalRange.
         
         psthTimeBin = 10e-3; %Time, in seconds, over which to bin spikes for PSTH summary plot
         psthAmpRange = [0 120]; %Amplitude range to display, in units of spikes/second
@@ -61,7 +61,7 @@ classdef SpikeGrid < most.Model
         
         % The following are properties that back up dependent properties.
         % This is for properties that need to be saved to disk.
-        spikeAmpWindow_; % backs up property spikeAmpWindow
+        verticalRange_; % backs up property verticalRange
     end
     
     properties (SetObservable, Transient)
@@ -69,7 +69,7 @@ classdef SpikeGrid < most.Model
     end
     
     properties (SetObservable, Dependent)
-        spikeAmpWindow; %2 element vector ([min max]) indicating voltage bounds or RMSMultiple (depending on thresholdType) for each spike plot
+        verticalRange; %2 element vector ([min max]) indicating voltage bounds or RMSMultiple (depending on thresholdType) for each spike plot
         refreshPeriodMaxNumSpikes = inf; %Maximum number of spikes to detect/plot during a given refresh period
         numAuxChans; %Number of auxiliary
     end
@@ -207,7 +207,7 @@ classdef SpikeGrid < most.Model
     end
     
     properties (Hidden, Dependent)
-        spikeScanWindow; %spikeTimeWindow in 'scan' units, which correspond to A/D 'scans' (a sample for each channel). Note that the window includes this # of pre & post scan, PLUS one additional scan for the spike itself
+        spikeScanWindow; %horizontalRange in 'scan' units, which correspond to A/D 'scans' (a sample for each channel). Note that the window includes this # of pre & post scan, PLUS one additional scan for the spike itself
         
         thresholdRMSScanRefreshPeriod; %thresholdRMSRefreshPeriod in scan units
         
@@ -234,7 +234,7 @@ classdef SpikeGrid < most.Model
         MAX_NUM_TABS = 8;
         
         INIT_RMS_THRESHOLD = 10; %Initial rmsMultiple to use when detecting spikes to exclude from initial RMS value determination
-        RASTER_DISP_STIM_RANGE_INCREMENT_FRACTION = 0.85; %fraction of stimNumDisplayRangeInfIncrement which must be reached before display range is auto-incremented.
+        RASTER_DISP_STIM_RANGE_INCREMENT_FRACTION = 0.85; %fraction of verticalRangeRasterInfIncrement which must be reached before display range is auto-incremented.
         
         SGL_BITS_PER_SAMPLE = 16; %A constant from SpikeGLX currently; should perhaps update SpikeGL to pull this from the DAQmx API
     end
@@ -291,7 +291,7 @@ classdef SpikeGrid < most.Model
             end
             obj.zprvInitializeRasterGridLines();
             
-            obj.spikeAmpWindow = [-aiRangeMax aiRangeMax];
+            obj.verticalRange = [-aiRangeMax aiRangeMax];
             obj.tabDisplayed = 1;
             
             %Clean-up
@@ -360,7 +360,7 @@ classdef SpikeGrid < most.Model
                 obj.hPanels.psth(i) = uipanel(obj.hFigs.psth,'Position',panelPosn);
                 
                 %Places axes in panel and configure
-                obj.hPlots(i) = axes('Parent',obj.hPanels.waveform(i),'Position',[0 0 1 1],'XLim',obj.spikeTimeWindow); %,'YLim',obj.spikeAmpWindow);
+                obj.hPlots(i) = axes('Parent',obj.hPanels.waveform(i),'Position',[0 0 1 1],'XLim',obj.horizontalRange); %,'YLim',obj.verticalRange);
                 obj.hRasters(i) = axes('Parent',obj.hPanels.raster(i),'Position',[0 0 1 1],'XLim',obj.stimTimeWindow);
                 obj.hPSTHs(i) = axes('Parent',obj.hPanels.psth(i),'Position',[0 0 1 1]);
                 
@@ -577,7 +577,7 @@ classdef SpikeGrid < most.Model
         end
         
         function val = get.spikeScanWindow(obj)
-            val = round(obj.spikeTimeWindow * obj.sglParamCache.niSampRate);
+            val = round(obj.horizontalRange * obj.sglParamCache.niSampRate);
         end
         
         function val = get.stimEventTypes_(obj)
@@ -622,14 +622,14 @@ classdef SpikeGrid < most.Model
             
             %Side-effects
             if ~strcmpi(oldVal,val)
-                %Adjust thresholdVal & spikeAmpWindow
+                %Adjust thresholdVal & verticalRange
                 
                 %TODO(?): A smarter adjustment based on the last-cached RMS values, somehow handlign the variety across channels
                 switch val
                     case 'volts'
-                        obj.spikeAmpWindow = [-1 1] * obj.sglParamCache.niAiRangeMax;
+                        obj.verticalRange = [-1 1] * obj.sglParamCache.niAiRangeMax;
                     case 'rmsMultiple'
-                        obj.spikeAmpWindow = [-2 10] * obj.thresholdVal;
+                        obj.verticalRange = [-2 10] * obj.thresholdVal;
                 end
                 
                 %Refresh threshold lines
@@ -638,12 +638,12 @@ classdef SpikeGrid < most.Model
         end
         
         
-        function val = get.spikeAmpWindow(obj)
+        function val = get.verticalRange(obj)
             val = get(obj.hPlots(1),'YLim');
         end
         
-        function set.spikeAmpWindow(obj,val)
-            obj.validatePropArg('spikeAmpWindow',val);
+        function set.verticalRange(obj,val)
+            obj.validatePropArg('verticalRange',val);
             
             if strcmpi(obj.spikeAmpUnits,'volts');
                 aiRangeMax = obj.sglParamCache.niAiRangeMax;
@@ -657,20 +657,20 @@ classdef SpikeGrid < most.Model
             set(obj.hPlots,'YLim',val);
             
             %Set real property
-            obj.spikeAmpWindow_ = val;
+            obj.verticalRange_ = val;
         end
         
-        function set.spikeAmpWindow_(obj,val)
+        function set.verticalRange_(obj,val)
             %force recalc of dependent property
-            obj.spikeAmpWindow_ = val; 
+            obj.verticalRange_ = val; 
         end
         
-        function set.spikeTimeWindow(obj,val)
-            obj.zprpAssertNotRunning('spikeTimeWindow');
-            obj.validatePropArg('spikeTimeWindow',val);
+        function set.horizontalRange(obj,val)
+            obj.zprpAssertNotRunning('horizontalRange');
+            obj.validatePropArg('horizontalRange',val);
             
             set(obj.hPlots,'XLim',val);
-            obj.spikeTimeWindow = val;
+            obj.horizontalRange = val;
         end
         
         function val = get.maxPointsPerAnimatedLine(obj)
@@ -678,7 +678,7 @@ classdef SpikeGrid < most.Model
             
            if strcmp(obj.spikesPerPlotClearMode,'oldest')
                spikeSampleRate = obj.sglParamCache.niSampRate;
-               numPointsPerWindow = spikeSampleRate * (obj.spikeTimeWindow(2)-obj.spikeTimeWindow(1));
+               numPointsPerWindow = spikeSampleRate * (obj.horizontalRange(2)-obj.horizontalRange(1));
                val = ceil(obj.spikesPerPlot * numPointsPerWindow);
            else
                val = Inf;
@@ -709,7 +709,7 @@ classdef SpikeGrid < most.Model
         function val = get.spikeRefractoryPeriod(obj)
             switch obj.displayMode
                 case 'waveform'
-                    val = obj.spikeTimeWindow(2);
+                    val = obj.horizontalRange(2);
                 case 'raster'
                     val = obj.spikeRefractoryPeriod;
             end
@@ -823,18 +823,18 @@ classdef SpikeGrid < most.Model
                               
         end
         
-        function set.stimNumDisplayRange(obj,val)
-            obj.validatePropArg('stimNumDisplayRange',val);
+        function set.verticalRangeRaster(obj,val)
+            obj.validatePropArg('verticalRangeRaster',val);
             
-            ylim = obj.zprvStimNumDisplayRange2YLim(val);
+            ylim = obj.zprvverticalRangeRaster2YLim(val);
             
             set(obj.hRasters,'YLim',ylim);
-            obj.stimNumDisplayRange = val;
+            obj.verticalRangeRaster = val;
         end
         
-        function set.stimNumDisplayRangeInfIncrement(obj,val)
-            obj.validatePropArg('stimNumDisplayRangeInfIncrement',val);
-            obj.stimNumDisplayRangeInfIncrement = val;
+        function set.verticalRangeRasterInfIncrement(obj,val)
+            obj.validatePropArg('verticalRangeRasterInfIncrement',val);
+            obj.verticalRangeRasterInfIncrement = val;
         end
         
         function set.stimStartChannel(obj,val)
@@ -932,17 +932,17 @@ classdef SpikeGrid < most.Model
             %Side Effects
             if ~strcmpi(oldVal,val)
                 
-                %Adjust thresholdVal & spikeAmpWindow
+                %Adjust thresholdVal & verticalRange
                 
                 %TODO(?): A smarter adjustment based on the last-cached RMS values, somehow handlign the variety across channels
                 switch val
                     case 'volts'
                         aiRangeMax = obj.sglParamCache.niAiRangeMax;
                         obj.thresholdVal = .1 * aiRangeMax;
-                        obj.spikeAmpWindow = [-1 1] * aiRangeMax;
+                        obj.verticalRange = [-1 1] * aiRangeMax;
                     case 'rmsMultiple'
                         obj.thresholdVal = 5;
-                        obj.spikeAmpWindow = [-2*obj.thresholdVal 10*obj.thresholdVal];
+                        obj.verticalRange = [-2*obj.thresholdVal 10*obj.thresholdVal];
                 end
                 
                 %Redraw threshold lines
@@ -1180,7 +1180,7 @@ classdef SpikeGrid < most.Model
             end
             
             %Save model properties
-            obj.mdlSaveConfig(filename,'include',{'spikeAmpWindow' 'gridFigPosition' 'psthFigPosition'});
+            obj.mdlSaveConfig(filename,'include',{'verticalRange' 'gridFigPosition' 'psthFigPosition'});
             
             %Save controller fig layout
             if ~isempty(obj.hController)
@@ -1591,7 +1591,7 @@ classdef SpikeGrid < most.Model
                         %Raster mode: leave all but the number of scans required to classify
                         obj.rawDataBuffer(1:end-max(1,obj.stimEventClassifyNumScans)+1,:) = [];
                     else
-                        %Waveform mode: leave only one full spikeTimeWindow (pre+post+1 sample) at the end
+                        %Waveform mode: leave only one full horizontalRange (pre+post+1 sample) at the end
                         obj.rawDataBuffer(1:end-(diff(obj.spikeScanWindow)+1),:) = [];
                     end
                 catch ME
@@ -2122,8 +2122,8 @@ classdef SpikeGrid < most.Model
             end
             
             %Update vert axis limits if needed (i.e. if upper limit is set to Inf)
-            ylim = obj.zprvStimNumDisplayRange2YLim(obj.stimNumDisplayRange);
-            if ~isequal(get(obj.hRasters(1),'YLim'),obj.stimNumDisplayRange)
+            ylim = obj.zprvverticalRangeRaster2YLim(obj.verticalRangeRaster);
+            if ~isequal(get(obj.hRasters(1),'YLim'),obj.verticalRangeRaster)
                 set(obj.hRasters,'YLim',ylim);
             end
             
@@ -2294,7 +2294,7 @@ classdef SpikeGrid < most.Model
 
                 %Plot new spike lines
                 spikeScanWindowLength = diff(obj.spikeScanWindow)+1;
-                xData = linspace(obj.spikeTimeWindow(1),obj.spikeTimeWindow(2),spikeScanWindowLength)';
+                xData = linspace(obj.horizontalRange(1),obj.horizontalRange(2),spikeScanWindowLength)';
                 
                 newSpikeCounts = obj.lastPlottedSpikeCount(i) + (1:numNewSpikes);                
                 lineIdxs = mod(newSpikeCounts,obj.spikesPerPlot) + 1; %The line object indices to use for these newly detected spikes
@@ -2386,7 +2386,7 @@ classdef SpikeGrid < most.Model
             end
             
             %Draw threshold for each channel, computing for each channel if needed
-            xData = obj.spikeTimeWindow;
+            xData = obj.horizontalRange;
             
             for i=obj.tabChanNumbers
                 plotIdx = mod(i-1,obj.PLOTS_PER_TAB) + 1;
@@ -2552,7 +2552,7 @@ classdef SpikeGrid < most.Model
                             
                             if reuseThreshold
                                 for k=1:length(threshold)
-                                    obj.hThresholdLines{k}(j) = line('Parent',obj.hPlots(j),'Color','r','XData',obj.spikeTimeWindow,'YData',[threshold(k) threshold(k)]); %'EraseMode','none',
+                                    obj.hThresholdLines{k}(j) = line('Parent',obj.hPlots(j),'Color','r','XData',obj.horizontalRange,'YData',[threshold(k) threshold(k)]); %'EraseMode','none',
                                 end
                             else %Compute/draw threshold lines from scratch
                                 redrawThresholdLines = true;
@@ -2582,12 +2582,12 @@ classdef SpikeGrid < most.Model
 
         end
         
-        function ylim = zprvStimNumDisplayRange2YLim(obj,val)
+        function ylim = zprvverticalRangeRaster2YLim(obj,val)
             ylim = val + [-1 0]; %Ensure the first element is seen
             if isinf(ylim(2))
                 numStimsToDisplay = max(obj.stimEventCount - ylim(1) + 1,1);
                 
-                numIncrementFactor = numStimsToDisplay/obj.stimNumDisplayRangeInfIncrement;
+                numIncrementFactor = numStimsToDisplay/obj.verticalRangeRasterInfIncrement;
                 numIncrementsNeeded = ceil(numIncrementFactor);
                 lastIncrementFraction = 1 - (numIncrementsNeeded - numIncrementFactor);
                 
@@ -2595,7 +2595,7 @@ classdef SpikeGrid < most.Model
                     numIncrementsNeeded = numIncrementsNeeded + 1;
                 end
                 
-                ylim = [ylim(1) numIncrementsNeeded * obj.stimNumDisplayRangeInfIncrement];
+                ylim = [ylim(1) numIncrementsNeeded * obj.verticalRangeRasterInfIncrement];
             end
         end
         
@@ -2801,9 +2801,9 @@ s.thresholdAbsolute = struct('Classes','binaryflex','Attributes','scalar');
 s.thresholdRMSRefreshPeriod = struct('Attributes',{{'scalar' 'positive' 'finite'}});
 s.thresholdRMSRefreshOnRetrigger = struct('Classes','binaryflex','Attributes','scalar');
 
-s.spikeTimeWindow = struct('Attributes',{{'numel' 2 'finite'}});
-%s.spikeAmpWindow = struct('Attributes',{{'finite' '1d'}});
-s.spikeAmpWindow = struct('Attributes',{{'numel' 2 'finite'}});
+s.horizontalRange = struct('Attributes',{{'numel' 2 'finite'}});
+%s.verticalRange = struct('Attributes',{{'finite' '1d'}});
+s.verticalRange = struct('Attributes',{{'numel' 2 'finite'}});
 
 s.spikeAmpUnits = struct('Options',{{'volts' 'rmsMultiple'}});
 
@@ -2822,8 +2822,8 @@ s.globalMeanSubtraction = struct('Classes','binaryflex','Attributes','scalar');
 s.stimStartThreshold = struct('Attributes',{{'finite' 'scalar'}});
 s.stimEventTypesDisplayed = struct();
 s.stimTimeWindow = struct('Attributes',{{'numel' 2 'finite'}});
-s.stimNumDisplayRange = struct('Attributes',{{'numel' 2 'nonnegative'}});
-s.stimNumDisplayRangeInfIncrement = struct('Attributes',{{'positive' 'scalar' 'finite'}});
+s.verticalRangeRaster = struct('Attributes',{{'numel' 2 'nonnegative'}});
+s.verticalRangeRasterInfIncrement = struct('Attributes',{{'positive' 'scalar' 'finite'}});
 s.stimEventClassifyFcn = struct();
 
 s.refreshRate = struct('Attributes',{{'finite' 'positive' 'scalar'}});
