@@ -1794,7 +1794,7 @@ classdef SpikeGrid < most.Model
                        
                 if isempty(obj.stimLastEventScanNumWindow)
                     spikeDataBufStartIdx = 1;
-                elseif obj.stimLastEventScanNumWindow(2) >= bufStartScanNum %Don't detect stimulus start if already within existing stimulus window
+                elseif obj.stimLastEventScanNumWindow(2) >= bufStartScanNum %Don't detect stimulus start within window (waveform or raster sweep) defined by last stimulus
                     spikeDataBufStartIdx = obj.stimLastEventScanNumWindow(2) - bufStartScanNum + 1;
                 else
                     spikeDataBufStartIdx = 1;
@@ -1812,7 +1812,11 @@ classdef SpikeGrid < most.Model
                     newStimScanNum = bufStartScanNum + stimIdx - 1;
                     obj.stimScanNums(end+1) = newStimScanNum;
                     
-                    obj.stimLastEventScanNumWindow = newStimScanNum + round(obj.horizontalRangeRaster/sampPeriod);
+                    if rasterDisplayMode
+                        obj.stimLastEventScanNumWindow = newStimScanNum + round(obj.horizontalRangeRaster/sampPeriod);
+                    else
+                        obj.stimLastEventScanNumWindow = newStimScanNum + round(obj.horizontalRange/sampPeriod);
+                    end
                     
                     obj.stimWindowStartScanNums(end+1) = obj.stimLastEventScanNumWindow(1);
                     obj.stimWindowEndScanNums(end+1) = obj.stimLastEventScanNumWindow(2);
