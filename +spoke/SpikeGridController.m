@@ -374,7 +374,7 @@ function s = lclInitPropBindings()
   s.gatingThreshold = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
   
   s.stimStartThreshold = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
-  s.stimTimeWindow = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
+  s.horizontalRangeRaster = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
   s.verticalRangeRasterInfIncrement = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
 
   s.spikesPerPlotClearMode = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','char'));

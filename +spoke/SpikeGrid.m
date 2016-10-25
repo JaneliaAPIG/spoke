@@ -40,7 +40,7 @@ classdef SpikeGrid < most.Model
         %Raster/PSTH display properties
         stimStartChannel = []; %Channel number (zero-indexed) to use for signaling start of stim
         stimStartThreshold = 0.5; %Value, in volts, to use for stim start signal
-        stimTimeWindow = [-1 1]; %2 element vector ([pre post]) indicating times, in seconds, to display before and after stim start threshold crossing in raster/psth plots
+        horizontalRangeRaster = [-1 1]; %2 element vector ([pre post]) indicating times, in seconds, to display before and after stim start threshold crossing in raster/psth plots
         verticalRangeRaster = [1 inf]; %2 element vector indicating which stim numbers to display, counted from last start/reset. Set second element to Inf to specify all stimuli should be displayed.
         verticalRangeRasterInfIncrement = 20; %When verticalRangeRaster(2)=Inf, specify the increment in which the number of stimuli displayed are incremented by.
         stimEventTypesDisplayed = {}; %String or string cell array indicating which event type(s) to display raster/PSTH data for.
@@ -361,7 +361,7 @@ classdef SpikeGrid < most.Model
                 
                 %Places axes in panel and configure
                 obj.hPlots(i) = axes('Parent',obj.hPanels.waveform(i),'Position',[0 0 1 1],'XLim',obj.horizontalRange); %,'YLim',obj.verticalRange);
-                obj.hRasters(i) = axes('Parent',obj.hPanels.raster(i),'Position',[0 0 1 1],'XLim',obj.stimTimeWindow);
+                obj.hRasters(i) = axes('Parent',obj.hPanels.raster(i),'Position',[0 0 1 1],'XLim',obj.horizontalRangeRaster);
                 obj.hPSTHs(i) = axes('Parent',obj.hPanels.psth(i),'Position',[0 0 1 1]);
                 
                 %TODO: Remove this function & just set here
@@ -849,16 +849,16 @@ classdef SpikeGrid < most.Model
             obj.stimStartThreshold = val;
         end
         
-        function set.stimTimeWindow(obj,val)
-            obj.zprpAssertNotRunning('stimTimeWindow');
-            obj.validatePropArg('stimTimeWindow',val);
+        function set.horizontalRangeRaster(obj,val)
+            obj.zprpAssertNotRunning('horizontalRangeRaster');
+            obj.validatePropArg('horizontalRangeRaster',val);
             
             obj.zprvClearPlots('raster');
             set(obj.hRasters,'XLim',val);
             
             obj.zprvClearPlots('psth');
             
-            obj.stimTimeWindow = val;
+            obj.horizontalRangeRaster = val;
         end
         
         
@@ -1225,7 +1225,7 @@ classdef SpikeGrid < most.Model
                 scansToBin = max(1,round(obj.psthTimeBin/scanPeriod));
                 scanPeriodBinned = scanPeriod * scansToBin;
                 
-                histogramBins = floor(obj.stimTimeWindow(1)/scanPeriod):scansToBin:ceil(obj.stimTimeWindow(2)/scanPeriod);
+                histogramBins = floor(obj.horizontalRangeRaster(1)/scanPeriod):scansToBin:ceil(obj.horizontalRangeRaster(2)/scanPeriod);
                 
                 plotCount = 0;
                 for c=obj.tabChanNumbers
@@ -1752,7 +1752,7 @@ classdef SpikeGrid < most.Model
 %                     newStimScanNum = bufStartScanNum + stimIdx - 1;
 %                     obj.stimScanNums(end+1) = newStimScanNum;
 %                     
-%                     obj.stimLastEventScanNumWindow = newStimScanNum + round(obj.stimTimeWindow/sampPeriod);
+%                     obj.stimLastEventScanNumWindow = newStimScanNum + round(obj.horizontalRangeRaster/sampPeriod);
 %                     
 %                     obj.stimWindowStartScanNums(end+1) = obj.stimLastEventScanNumWindow(1);
 %                     obj.stimWindowEndScanNums(end+1) = obj.stimLastEventScanNumWindow(2);
@@ -1864,7 +1864,7 @@ classdef SpikeGrid < most.Model
                     newStimScanNum = bufStartScanNum + stimIdx - 1;
                     obj.stimScanNums(end+1) = newStimScanNum;
                     
-                    obj.stimLastEventScanNumWindow = newStimScanNum + round(obj.stimTimeWindow/sampPeriod);
+                    obj.stimLastEventScanNumWindow = newStimScanNum + round(obj.horizontalRangeRaster/sampPeriod);
                     
                     obj.stimWindowStartScanNums(end+1) = obj.stimLastEventScanNumWindow(1);
                     obj.stimWindowEndScanNums(end+1) = obj.stimLastEventScanNumWindow(2);
@@ -1973,11 +1973,11 @@ classdef SpikeGrid < most.Model
                                 taggedNewSpike = true;
                             end
                             
-                        elseif spikeScanNum < (obj.maxReadableScanNum + round(obj.stimTimeWindow(1)/sampPeriod))
+                        elseif spikeScanNum < (obj.maxReadableScanNum + round(obj.horizontalRangeRaster(1)/sampPeriod))
                             %No hope of ever finding associated stimulus: mark for deletion
                             spikesToClear(end+1) = spikeIdx;
                         else
-                            %fprintf('spikeScanNum: %d maxReadableScanNum: %d preStimTime: %d mostRecentHopefulScan: %d\n',spikeScanNum,obj.maxReadableScanNum, round(obj.stimTimeWindow(1)/sampPeriod),(obj.maxReadableScanNum - round(obj.stimTimeWindow(1)/sampPeriod)));
+                            %fprintf('spikeScanNum: %d maxReadableScanNum: %d preStimTime: %d mostRecentHopefulScan: %d\n',spikeScanNum,obj.maxReadableScanNum, round(obj.horizontalRangeRaster(1)/sampPeriod),(obj.maxReadableScanNum - round(obj.horizontalRangeRaster(1)/sampPeriod)));
                             %Do nothing -- spike still has hope of finding associated stimulus
                         end
                     end                    
@@ -2821,7 +2821,7 @@ s.globalMeanSubtraction = struct('Classes','binaryflex','Attributes','scalar');
 
 s.stimStartThreshold = struct('Attributes',{{'finite' 'scalar'}});
 s.stimEventTypesDisplayed = struct();
-s.stimTimeWindow = struct('Attributes',{{'numel' 2 'finite'}});
+s.horizontalRangeRaster = struct('Attributes',{{'numel' 2 'finite'}});
 s.verticalRangeRaster = struct('Attributes',{{'numel' 2 'nonnegative'}});
 s.verticalRangeRasterInfIncrement = struct('Attributes',{{'positive' 'scalar' 'finite'}});
 s.stimEventClassifyFcn = struct();
