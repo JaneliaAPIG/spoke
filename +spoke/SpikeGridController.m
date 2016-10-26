@@ -376,8 +376,9 @@ function s = lclInitPropBindings()
 
   s.spikesPerPlotClearMode = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','char'));
   
-  s.thresholdRMSRefreshPeriod = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
-  s.thresholdRMSRefreshOnRetrigger =  struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
+  s.baselineStatsRefreshPeriod = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
+  %s.baselineStatsRefreshOnRetrigger =  struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
+  
   s.thresholdAbsolute = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','logical'));
 
   s.psthTimerPeriod = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));

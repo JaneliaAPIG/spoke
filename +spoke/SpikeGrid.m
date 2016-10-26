@@ -11,8 +11,9 @@ classdef SpikeGrid < most.Model
         thresholdType = 'rmsMultiple'; %One of {'volts' 'rmsMultiple'}. If rmsMultiple is specified, it is assumed that signals' DC is already filtered.
         thresholdVal = 5; %Threshold, in volts or SD units, to use for spike detection
         thresholdAbsolute = false; % Logical indicating whether threshold should be considered an absolute value
-        thresholdRMSRefreshPeriod = 2; %Period, in seconds, at which RMS value is recomputed for 'rmsMultiple' threshold detection
-        thresholdRMSRefreshOnRetrigger = true; %Logical indicating whether RMS value should be recomputed on SpikeGL 'retriggers' (applies for 'rmsMultiple' threshold detection)
+        
+        baselineStatsRefreshPeriod = 2; %Period, in seconds, at which signal baseline stats (mean & RMS) values are recomputed, when needed (e.g. for 'rmsMultiple' threshold detection)
+        %baselineStatsRefreshOnRetrigger = true; %Logical indicating whether RMS value should be recomputed on SpikeGL 'retriggers' (applies for 'rmsMultiple' threshold detection)
                
         globalMeanSubtraction = false; %Logical indicating whether to compute/apply global mean subtraction
         
@@ -133,18 +134,18 @@ classdef SpikeGrid < most.Model
         neuralChanDispList; %Ordered list of neural chans displayed. Display ordering applied. Channel subset, if any, is applied.
         auxChanProcList; %List of auxiliary chans processed. Channel subset, if any, is applied.       
                 
-        thresholdRMS; %Array of RMS values, one per channel, computed from all non-spike-window scans from within last thresholdRMSTime
-        thresholdMean; %Array of mean values, one per channel, computed from all non-spike-window scans from within last thresholdRMSTime
-        thresholdRMSLastScan = 0; %Last scan number at which threshold RMS value was updated
+        baselineRMS; %Array of RMS values, one per channel, computed from all non-spike-window scans from within last baselineRMSTime
+        baselineMean; %Array of mean values, one per channel, computed from all non-spike-window scans from within last baselineRMSTime
+        baselineRMSLastScan = 0; %Last scan number at which threshold RMS value was updated
         
         spikeData = {}; %Cell array, one cell per available neural channel, of structures containing data for each detected spike -- scan number, waveform data. For waveform mode, spikeData gets cleared with each set of newly detected spikes.
         spikeCount = []; %Scalar array specifying number of spikes detected per channel since start()
         lastPlottedSpikeCount = []; %Scalar array specifying the spike count, for each channel that's been last plotted
         lastPlottedSpikeCountSinceClear = []; %Scalar array specificying the spike count, for each channel that's been last plotted (cleared every time a channel is cleared) - only used for 'all' plot clear mode.
-        %globalMean; %Global mean value across acquisition channels, computed from all non-spike-window scan from within last thresholdRMSTime, if globalMeanSubtraction=true is nonempty
+        %globalMean; %Global mean value across acquisition channels, computed from all non-spike-window scan from within last baselineRMSTime, if globalMeanSubtraction=true is nonempty
         
-        %thresholdRMSExcludedScans; %Array of numbers, one per channel, indicating number of scans included into RMS calculation, from within last thresholdRMSTime
-        %thresholdRMSNumSamples;
+        %baselineRMSExcludedScans; %Array of numbers, one per channel, indicating number of scans included into RMS calculation, from within last baselineRMSTime
+        %baselineRMSNumSamples;
         
         bufScanNumEnd; %Scan number of the last element in the rawDataBuffer
         rawDataBuffer; %Array to cache raw channel data to process during each timer cycle. Grows & contracts each cycle.
@@ -205,7 +206,7 @@ classdef SpikeGrid < most.Model
     properties (Hidden, Dependent)
         horizontalRangeScans; %horizontalRange in 'scan' units, which correspond to A/D 'scans' (a sample for each channel). Note that the window includes this # of pre & post scan, PLUS one additional scan for the spike itself
         
-        thresholdRMSScanRefreshPeriod; %thresholdRMSRefreshPeriod in scan units
+        baselineStatsRefreshPeriodScans; %baselineStatsRefreshPeriod in scan units
         
         maxBufSizeScans; %Maximum number of scans to process during a refresh period
         refreshPeriodAvgScans; %Average number of scans to process at each refresh period
@@ -912,8 +913,8 @@ classdef SpikeGrid < most.Model
             obj.zprvDrawThresholdLines();
         end
         
-        function val = get.thresholdRMSScanRefreshPeriod(obj)
-            val = round(obj.thresholdRMSRefreshPeriod * obj.sglParamCache.niSampRate);
+        function val = get.baselineStatsRefreshPeriodScans(obj)            
+            val = round(obj.baselineStatsRefreshPeriod * obj.sglParamCache.niSampRate);
         end
         
         function set.thresholdType(obj,val)
@@ -954,11 +955,11 @@ classdef SpikeGrid < most.Model
             obj.zprvDrawThresholdLines();
         end
         
-        function set.thresholdRMSRefreshPeriod(obj,val)
-            obj.zprpAssertNotRunning('thresholdRMSRefreshPeriod');
-            obj.validatePropArg('thresholdRMSRefreshPeriod',val);
+        function set.baselineStatsRefreshPeriod(obj,val)
+            obj.zprpAssertNotRunning('baselineStatsRefreshPeriod');
+            obj.validatePropArg('baselineStatsRefreshPeriod',val);
             
-            obj.thresholdRMSRefreshPeriod = val;
+            obj.baselineStatsRefreshPeriod = val;
         end
         
     end
@@ -1347,7 +1348,7 @@ classdef SpikeGrid < most.Model
                 numNeuralChans = numel(obj.neuralChansAvailable);
                                 
                 rmsMultipleThresh = strcmpi(obj.thresholdType,'rmsMultiple');
-                rmsMultipleInitializing = rmsMultipleThresh && obj.thresholdRMSLastScan == 0;
+                rmsMultipleInitializing = rmsMultipleThresh && obj.baselineRMSLastScan == 0;
                 rasterDisplayMode = strcmpi(obj.displayMode,'raster');
 				stimulusMode = ~isempty(obj.stimStartChannel) && ~isempty(obj.stimStartThreshold);
                 stimulusTriggeredWaveformMode = strcmpi(obj.displayMode,'waveform') && stimulusMode;
@@ -1367,10 +1368,10 @@ classdef SpikeGrid < most.Model
                 %                     obj.zprvResetAcquisition(true); %Reset spike data buffer, filter -- leave RMS/mean & spikeData intact
                 %
                 %                     %Recompute RMS if needed
-                %                     if rmsMultipleThresh && obj.thresholdRMSRefreshOnRetrigger
-                %                         obj.thresholdRMS = zeros(numDispChans,1);
-                %                         obj.thresholdMean = zeros(numDispChans,1);
-                %                         obj.thresholdRMSLastScan = 0;
+                %                     if rmsMultipleThresh && obj.baselineStatsRefreshOnRetrigger
+                %                         obj.baselineRMS = zeros(numDispChans,1);
+                %                         obj.baselineMean = zeros(numDispChans,1);
+                %                         obj.baselineRMSLastScan = 0;
                 %
                 %                         rmsMultipleInitializing = true;
                 %                     end
@@ -1470,9 +1471,9 @@ classdef SpikeGrid < most.Model
 					if rmsMultipleInitializing %Handle case where no RMS data has been computed yet
 						%obj.rawDataBuffer((obj.refreshPeriodAvgScans+1):end,:) = []; %VVV062812: Is this needed/wanted?
 						
-						znstUpdateRMSAndMean([],[]); %Compute rms/mean without spikes
+						znstUpdateBaselineStats([],[]); %Compute rms/mean without spikes
 						newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum); %Detect spikes using rmsMultiple=obj.INIT_RMS_THRESHOLD
-						znstUpdateRMSAndMean(newSpikeScanNums,bufStartScanNum); %Recompute a rms value with, if anything, excess spike exclusion
+						znstUpdateBaselineStats(newSpikeScanNums,bufStartScanNum); %Recompute a rms value with, if anything, excess spike exclusion
 						
 						%newSpikeScanNums = cell(numDispChans,1); %Don't plot/store these spikes, though
 						newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum);
@@ -1533,10 +1534,10 @@ classdef SpikeGrid < most.Model
                     obj.waveformWrap(end+1) = newWaveformWrapVal;
                 end
                 
-                %Update current RMS and mean values, if needed
+                %Update current baseline stats values (mean & RMS), if needed
                 if (rmsMultipleThresh || obj.filterWindow(1) == 0) && ...
-                        (obj.bufScanNumEnd - obj.thresholdRMSLastScan) > obj.thresholdRMSScanRefreshPeriod % enough time has elapsed since last RMS sampling
-                    znstUpdateRMSAndMean(newSpikeScanNums,bufStartScanNum);
+                        (obj.bufScanNumEnd - obj.baselineRMSLastScan) > obj.baselineStatsRefreshPeriodScans % enough time has elapsed since last RMS sampling
+                    znstUpdateBaselineStats(newSpikeScanNums,bufStartScanNum);
                 end
                 t8 = toc(t0);
                 
@@ -1989,7 +1990,7 @@ classdef SpikeGrid < most.Model
                 end
             end
             
-            function znstUpdateRMSAndMean(newSpikeScanNums,bufStartScanNum)
+            function znstUpdateBaselineStats(newSpikeScanNums,bufStartScanNum)
                 %Extract rawDataBuffer data, excluding last spike-window post
                 %time (not yet processed for spikes), and excluding just-detected
                 %spike windows
@@ -2042,11 +2043,11 @@ classdef SpikeGrid < most.Model
                     %fprintf('Computing mean & RMS for channel %d. Num idxs to average: %d\tSDB size: %s\n',i,length(rmsDataIdxs{i}),mat2str(size(obj.rawDataBuffer)));
                     dataLen = length(rmsDataIdxs{i});
                     if obj.filterWindow(1) > 0  %No need for per-channel mean subtraction if highpass-filtering
-                        obj.thresholdMean(i) = 0;
-                        obj.thresholdRMS(i) = sqrt(sum(double(obj.rawDataBuffer(rmsDataIdxs{i},i)).^2)/dataLen);
+                        obj.baselineMean(i) = 0;
+                        obj.baselineRMS(i) = sqrt(sum(double(obj.rawDataBuffer(rmsDataIdxs{i},i)).^2)/dataLen);
                     else %Use per-channel mean subtraction
-                        obj.thresholdMean(i) = sum(double(obj.rawDataBuffer(rmsDataIdxs{i},i)))/dataLen;
-                        obj.thresholdRMS(i) = sqrt(sum((double(obj.rawDataBuffer(rmsDataIdxs{i},i)) - obj.thresholdMean(i)).^2)/dataLen);
+                        obj.baselineMean(i) = sum(double(obj.rawDataBuffer(rmsDataIdxs{i},i)))/dataLen;
+                        obj.baselineRMS(i) = sqrt(sum((double(obj.rawDataBuffer(rmsDataIdxs{i},i)) - obj.baselineMean(i)).^2)/dataLen);
                     end
                 end
                 
@@ -2057,7 +2058,7 @@ classdef SpikeGrid < most.Model
                 
                 %Update last scan at which RMS has been computed
                 if ~firstPassMode
-                    obj.thresholdRMSLastScan = obj.bufScanNumEnd;
+                    obj.baselineRMSLastScan = obj.bufScanNumEnd;
                 end
                 
                 
@@ -2068,18 +2069,18 @@ classdef SpikeGrid < most.Model
         function newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum)
             
             if strcmpi(obj.thresholdType,'rmsMultiple')
-                if obj.thresholdRMSLastScan == 0 %No RMS data has been computed yet
+                if obj.baselineRMSLastScan == 0 %No RMS data has been computed yet
                     %newSpikeScanNums = cell(numDispChans,1);
-                    threshVal = obj.thresholdRMS * obj.INIT_RMS_THRESHOLD; %Use pre-set RMS multiplier for first buffer
+                    threshVal = obj.baselineRMS * obj.INIT_RMS_THRESHOLD; %Use pre-set RMS multiplier for first buffer
                 else
-                    threshVal = obj.thresholdVal * obj.thresholdRMS;
+                    threshVal = obj.thresholdVal * obj.baselineRMS;
                 end
                 
                 
                 if obj.filterWindow(1) > 0
                     threshMean = 0; %Highpass filtering supercedes mean subtraction
                 else
-                    threshMean = obj.thresholdMean;
+                    threshMean = obj.baselineMean;
                 end
                 
                 [newSpikeScanNums, obj.maxNumSpikesApplied] = zlclDetectSpikes(obj.spikeData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,threshMean,obj.refreshPeriodMaxNumSpikes,obj.sglChanSubset,obj.neuralChanAcqList); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
@@ -2326,13 +2327,13 @@ classdef SpikeGrid < most.Model
                         if strcmpi(obj.thresholdType,'volts') %no mean subtraction...just show as is
                             waveform = double(waveform) * obj.voltsPerBitNeural;
                         else  %RMS-multiple threshold --> do mean subtraction
-                            waveform = (double(waveform) - obj.thresholdMean(i)) * obj.voltsPerBitNeural;
+                            waveform = (double(waveform) - obj.baselineMean(i)) * obj.voltsPerBitNeural;
                         end
                     case 'rmsMultiple'
                         if obj.filterWindow(1) > 0
-                            waveform = double(waveform) / obj.thresholdRMS(i);
+                            waveform = double(waveform) / obj.baselineRMS(i);
                         else %Use mean subtraction
-                            waveform = (double(waveform) - obj.thresholdMean(i)) / obj.thresholdRMS(i);
+                            waveform = (double(waveform) - obj.baselineMean(i)) / obj.baselineRMS(i);
                         end
                 end
                 %Update line object with waveform for current spike
@@ -2379,7 +2380,7 @@ classdef SpikeGrid < most.Model
             %Compute all-channel threshold; determine lack of threshold val -- as applicable
             perChanThreshold = ~strcmpi(obj.thresholdType,obj.spikeAmpUnits);
             if perChanThreshold %RMS threshold with voltage units -- this is only mismatch type presently allowed
-                if isempty(obj.thresholdRMS)
+                if isempty(obj.baselineRMS)
                     obj.hThresholdLines = repmat({ones(numNeuralChans,1) * -1},2,1);
                     return; %nothing to draw
                 end
@@ -2394,7 +2395,7 @@ classdef SpikeGrid < most.Model
                 plotIdx = mod(i-1,obj.PLOTS_PER_TAB) + 1;
 
                 if perChanThreshold
-                    threshold = obj.thresholdVal * obj.thresholdRMS(i) * obj.voltsPerBitNeural;
+                    threshold = obj.thresholdVal * obj.baselineRMS(i) * obj.voltsPerBitNeural;
                 end
                 
                 if ~isempty(threshold)
@@ -2434,9 +2435,9 @@ classdef SpikeGrid < most.Model
             obj.rawDataBuffer = zeros(0,numel(obj.neuralChanDispList) + numel(obj.auxChanProcList));
             
             if ~fileRollover %&& strcmpi(obj.thresholdType,'rmsMultiple')
-                obj.thresholdRMS = zeros(numNeuralChans,1);
-                obj.thresholdMean = zeros(numNeuralChans,1);
-                obj.thresholdRMSLastScan = 0;
+                obj.baselineRMS = zeros(numNeuralChans,1);
+                obj.baselineMean = zeros(numNeuralChans,1);
+                obj.baselineRMSLastScan = 0;
             end
             
             if ~isempty(obj.filterCoefficients)
@@ -2700,7 +2701,7 @@ end
 
 
 %% LOCAL FUNCTIONS
-function [newSpikeScanNums, maxNumSpikesApplied] = zlclDetectSpikes(spikeData,rawDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,thresholdMean,maxNumSpikes,sglChanSubset,chanSubset)
+function [newSpikeScanNums, maxNumSpikesApplied] = zlclDetectSpikes(spikeData,rawDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,baselineMean,maxNumSpikes,sglChanSubset,chanSubset)
 %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
 %
 % spikeData: Cell array, one element per channel, containing data for each detected spike (from earlier timer callback period(s))
@@ -2709,7 +2710,7 @@ function [newSpikeScanNums, maxNumSpikesApplied] = zlclDetectSpikes(spikeData,ra
 % postSpikeNumScans: Number of scans following each detected spike to exclude from spike detection (the spike detection 'refractory period')
 % thresholdVal: May be a scalar, or a vector with one value per channel
 % thresholdAbsolute: Logical. If true, both crossings above thresholdVal or below -thresholdVal are considered spikes.
-% thresholdMean: Mean value to subtract from data before detecting threshold crossings.
+% baselineMean: Mean value to subtract from data before detecting threshold crossings.
 % maxNumSpikes: Scalar, indicating max number of spikes to detect per channel (from the start of the rawDataBuffer)
 %
 % NOTES:
@@ -2724,8 +2725,8 @@ if isscalar(thresholdVal)
     thresholdVal = repmat(thresholdVal,numNeuralChans,1);
 end
 
-if isscalar(thresholdMean)
-    thresholdMean = repmat(thresholdMean,numNeuralChans,1);
+if isscalar(baselineMean)
+    baselineMean = repmat(baselineMean,numNeuralChans,1);
 end
 
 %for i=1:numNeuralChans
@@ -2750,13 +2751,13 @@ for h=1:numel(chanSubset)
         %fprintf('currIdx: %d scansToSearch: %d postSpikeNumScans: %d\n',currIdx,scansToSearch,postSpikeNumScans);
         %Find at most one spike (threshold crossing) in the rawDataBuffer
         if thresholdAbsolute %Find crossings above or below absolute threshold level
-            nextSpikeIdx = currIdx + find(diff(abs(rawDataBuffer(currIdx:scansToSearch,h) - thresholdMean(i)) > abs(thresholdVal(i))) == 1,1);
+            nextSpikeIdx = currIdx + find(diff(abs(rawDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) > abs(thresholdVal(i))) == 1,1);
         else
             if thresholdVal >= 0 %Find crossings above threshold level
-%                 sprintf('%d, %d, %d, %d, %d, %d\n',i, currIdx,scansToSearch,length(thresholdMean),length(thresholdVal), length(rawDataBuffer))
-                nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,h) - thresholdMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
+%                 sprintf('%d, %d, %d, %d, %d, %d\n',i, currIdx,scansToSearch,length(baselineMean),length(thresholdVal), length(rawDataBuffer))
+                nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
             else %Find crossings below threshold level                
-                nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,h) - thresholdMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
+                nextSpikeIdx = currIdx + find(diff((rawDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
             end
         end
         
@@ -2799,8 +2800,8 @@ s.tabDisplayed  = struct('Attributes',{{'scalar' 'finite' 'positive' 'integer'}}
 s.thresholdType = struct('Options',{{'volts' 'rmsMultiple'}});
 s.thresholdVal = struct('Attributes',{{'scalar' 'nonempty' 'finite'}});
 s.thresholdAbsolute = struct('Classes','binaryflex','Attributes','scalar');
-s.thresholdRMSRefreshPeriod = struct('Attributes',{{'scalar' 'positive' 'finite'}});
-s.thresholdRMSRefreshOnRetrigger = struct('Classes','binaryflex','Attributes','scalar');
+s.baselineStatsRefreshPeriod = struct('Attributes',{{'scalar' 'positive' 'finite'}});
+%s.baselineStatsRefreshOnRetrigger = struct('Classes','binaryflex','Attributes','scalar');
 
 s.horizontalRange = struct('Attributes',{{'numel' 2 'finite'}});
 %s.verticalRange = struct('Attributes',{{'finite' '1d'}});
