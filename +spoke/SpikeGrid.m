@@ -2303,18 +2303,18 @@ classdef SpikeGrid < most.Model
 
                 % Draw new spikes
                 if ~isempty(obj.waveformWrap)
-                    j=0; % J=0 in this case because we are referring to a previous waveform (as a product of a previously detected stimulus or spike)
-                    fprintf('waveformWrap: %s\n',mat2str(obj.waveformWrap));
+                    j=0; % used only to pass assert in nested function below. J=0 in this case because we are referring to a previous waveform (as a product of a previously detected stimulus or spike)
                     znstPlotWaveform(obj.partialWaveformBuffer{1,i});
-                    obj.waveformWrap(1) = [];
-                    obj.partialWaveformBuffer(1,:) = [];
                 else                    
                     for j=1:numNewSpikes
                         znstPlotWaveform(obj.spikeData{i}.waveforms{j});
                     end
-                end                    
-      
+                end
             end            
+                if ~isempty(obj.waveformWrap)
+                    obj.waveformWrap(1) = [];
+                    obj.partialWaveformBuffer(1,:) = [];
+                end
             
             function znstPlotWaveform(waveform)
                 if isempty(waveform)
