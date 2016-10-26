@@ -1399,7 +1399,6 @@ classdef SpikeGrid < most.Model
                 
                 meanScansPerTimerTick = sampRate / obj.refreshRate; 
                 scansToRead = min(scansToRead_, round(2  * meanScansPerTimerTick));
-                
 
                 if scansToRead < scansToRead_
                    fprintf(2,'WARNING. A large number of queued-up samples to read detected: %d. If intermittent, this should not cause a problem.\n',scansToRead_ - scansToRead); 
@@ -1530,7 +1529,6 @@ classdef SpikeGrid < most.Model
                 end
                 t7 = toc(t0);
                 
-                    disp(newWaveformWrapVal)
                 if ~isempty(newWaveformWrapVal)
                     obj.waveformWrap(end+1) = newWaveformWrapVal;
                 end
