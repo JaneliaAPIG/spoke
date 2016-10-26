@@ -182,8 +182,9 @@ classdef SpikeGrid < most.Model
         bmarkPreProcessTimeStats = zeros(3,1);; %Array of [mean std n]
         bmarkPlotTimeStats = zeros(3,1);; %Array of [mean std n]
         bmarkPostProcessTimeStats = zeros(3,1);; %Array of [mean std n]
-        
-        flipVal = 0; % Internal property used for alternating spacing of debugging text.
+               
+        waveformWrap = [];  %Flag signaling that stimulus or spike detected at end of timer processing period - waveform must be completed in the next processing period
+        partialWaveformBuffer = {}; % Buffer that holds part of a waveform from prior processing period. Used when waveformWrap is true.
     end
     
     properties (Hidden, SetAccess=immutable)
@@ -1000,7 +1001,9 @@ classdef SpikeGrid < most.Model
             obj.maxReadableScanNum = 0;
             obj.lastMaxReadableScanNum = 0;
             obj.priorfileMaxReadableScanNum = 0;
-                                               
+            obj.waveformWrap = [];
+            obj.partialWaveformBuffer = {};
+            
             hTimers = obj.hTimer;
             
             %Apply channel ordering & subsetting, if specified in SpikeGLX
@@ -1445,6 +1448,12 @@ classdef SpikeGrid < most.Model
                     [newData,obj.filterCondition] = filter(obj.filterCoefficients{2},obj.filterCoefficients{1},double(newData),obj.filterCondition); %Convert to double..but still in A/D count values, not voltages
                 end
                 
+                if ~isempty(obj.waveformWrap)
+                    for iter= 1:obj.sglChanSubset
+                        obj.partialWaveformBuffer{end, iter} = [obj.partialWaveformBuffer{end, iter} newData(1:obj.waveformWrap(end),iter)];
+                    end
+                end
+                
                 %Append data to rawDataBuffer
                 bufStartScanNum = znstAugmentRawDataBuffer(scansToRead, newData);
                 t3 = toc(t0);
@@ -1611,10 +1620,9 @@ classdef SpikeGrid < most.Model
             function znstStoreNewWaveforms(newWaveformOffsets,bufStartScanNum)
                 
                 %newWaveformOffsets is a scalar in
-                %stimulusTriggeredWaveformMode;and a (per-channel) cell
-                %array of (per-spike) variable-length arrays in standard
+                %stimulusTriggeredWaveformMode;and a (nulti-channel) cell
+                %array of (multi-spike) variable-length arrays in standard
                 %spike-triggered waveform mode
-                               
                 
                 scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
                 waveformDisplay = strcmpi(obj.displayMode,'waveform');
@@ -1686,10 +1694,20 @@ classdef SpikeGrid < most.Model
                                     waveform(idxWindow < 1) = obj.rawDataBuffer(1,h);
                                     waveform(idxWindow >= 1) = obj.rawDataBuffer(idxWindow >= 1,h);
                                     obj.spikeData{i}.waveforms{j} = waveform;
-                                elseif (idxWindowMax(end) > size(obj.rawDataBuffer,1)) %'late' waveform at end of a timer chunk, extending beyond available data
-                                    %TODO: Figure out if this ever happens & if we need to do something more about it
-                                    fprintf('waveform #%d out of bounds, channel #%d, idxWindow min(1): %d, idxWindow min(end): %d, idxWindow max(1): %d, idxWindow max(end): %d\n', ...
-                                        j, i, idxWindowMin(1), idxWindowMin(end), idxWindowMax(1), idxWindowMin(end) );
+                                elseif (idxWindowMax(end) > size(obj.rawDataBuffer,1)) %'late' waveform at end of a timer chunk, extending beyond available data                                    
+                                    if stimulusTriggeredWaveformMode
+                                        if h==1
+                                            newLength = size(obj.partialWaveformBuffer,1) + 1;
+                                            obj.waveformWrap(end+1) = idxWindowMax(end) - size(obj.rawDataBuffer,1); %TODO CHECK FOR +1 NECESSARY?
+                                        size(idxWindowMin)
+                                        size(idxWindowMax)
+                                        end
+                                        obj.partialWaveformBuffer{newLength,i} = obj.rawDataBuffer(idxWindowMin:idxWindowMax,h);
+                                    else
+                                        %TODO: Handle waveformWrap for spike-triggered case
+                                        fprintf('waveform #%d out of bounds, channel #%d, idxWindow min(1): %d, idxWindow min(end): %d, idxWindow max(1): %d, idxWindow max(end): %d\n', ...
+                                            j, i, idxWindowMin(1), idxWindowMin(end), idxWindowMax(1), idxWindowMin(end) );
+                                    end
                                 else
                                     obj.spikeData{i}.waveforms{j} = obj.rawDataBuffer(idxWindow,h);
                                 end
@@ -2279,34 +2297,46 @@ classdef SpikeGrid < most.Model
                     end
 
                 % Draw new spikes
-                for j=1:numNewSpikes
-                    waveform = obj.spikeData{i}.waveforms{j};
-                    
-                    assert(length(waveform) == length(xData),'Waveform data for chan %d (%d), spike %d not of expected length (%d)\n',i,length(waveform),j,length(xData));
-                    
-                    %Scale waveform from A/D units to target units, applying mean subtraction if thresholdType='rmsMultiple'
-                    switch obj.spikeAmpUnits
-                        case 'volts'
-                            if strcmpi(obj.thresholdType,'volts') %no mean subtraction...just show as is
-                                waveform = double(waveform) * obj.voltsPerBitNeural;
-                            else  %RMS-multiple threshold --> do mean subtraction
-                                waveform = (double(waveform) - obj.thresholdMean(i)) * obj.voltsPerBitNeural;
-                            end
-                        case 'rmsMultiple'
-                            if obj.filterWindow(1) > 0
-                                waveform = double(waveform) / obj.thresholdRMS(i);
-                            else %Use mean subtraction
-                                waveform = (double(waveform) - obj.thresholdMean(i)) / obj.thresholdRMS(i);
-                            end
+                if ~isempty(obj.waveformWrap)
+                    j=0; % J=0 in this case because we are referring to a previous waveform (as a product of a previously detected stimulus or spike)
+                    fprintf('waveformWrap: %s\n',mat2str(obj.waveformWrap));
+                    znstPlotWaveform(obj.partialWaveformBuffer{1,i});
+                    obj.waveformWrap(1) = [];
+                    obj.partialWaveformBuffer(1,:) = [];
+                else                                   
+                    for j=1:numNewSpikes
+                        znstPlotWaveform(obj.spikeData{i}.waveforms{j})
                     end
-                    %Update line object with waveform for current spike
-                    obj.hSpikeLines(plotIdx).addpoints(vertcat(xData, NaN),vertcat(waveform, NaN)); % old
-                    obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;
-                    obj.lastPlottedSpikeCountSinceClear(i) = obj.lastPlottedSpikeCountSinceClear(i) + 1;
+                end                    
+      
+            end            
+            
+            function znstPlotWaveform(waveform)
+                assert(length(waveform) == length(xData),'Waveform data for chan %d (%d), spike %d not of expected length (%d)\n',i,length(waveform),j,length(xData));
+                
+                %Scale waveform from A/D units to target units, applying mean subtraction if thresholdType='rmsMultiple'
+                switch obj.spikeAmpUnits
+                    case 'volts'
+                        if strcmpi(obj.thresholdType,'volts') %no mean subtraction...just show as is
+                            waveform = double(waveform) * obj.voltsPerBitNeural;
+                        else  %RMS-multiple threshold --> do mean subtraction
+                            waveform = (double(waveform) - obj.thresholdMean(i)) * obj.voltsPerBitNeural;
+                        end
+                    case 'rmsMultiple'
+                        if obj.filterWindow(1) > 0
+                            waveform = double(waveform) / obj.thresholdRMS(i);
+                        else %Use mean subtraction
+                            waveform = (double(waveform) - obj.thresholdMean(i)) / obj.thresholdRMS(i);
+                        end
                 end
-            end
+                %Update line object with waveform for current spike
+                obj.hSpikeLines(plotIdx).addpoints(vertcat(xData, NaN),vertcat(waveform, NaN)); % old
+                obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;
+                obj.lastPlottedSpikeCountSinceClear(i) = obj.lastPlottedSpikeCountSinceClear(i) + 1;
+            end                
+            
         end
-        
+
         function zprvSetAxesProps(obj,hAx)
             %Axes properties for spoke waveform grid axes
             set(hAx,'XTick',0,'YTick',0,'XGrid','on','YGrid','on','XTickLabel','','YTickLabel','');
