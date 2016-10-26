@@ -182,8 +182,8 @@ classdef SpikeGrid < most.Model
         bmarkPreProcessTimeStats = zeros(3,1);; %Array of [mean std n]
         bmarkPlotTimeStats = zeros(3,1);; %Array of [mean std n]
         bmarkPostProcessTimeStats = zeros(3,1);; %Array of [mean std n]
-               
-        waveformWrap = [];  %Flag signaling that stimulus or spike detected at end of timer processing period - waveform must be completed in the next processing period
+
+        waveformWrap = []; %stimulus or spike detected at end of timer processing period - waveform must be completed by this number of samples in the next processing period
         partialWaveformBuffer = {}; % Buffer that holds part of a waveform from prior processing period. Used when waveformWrap is true.
     end
     
@@ -1325,6 +1325,8 @@ classdef SpikeGrid < most.Model
             
             try
                 
+                newWaveformWrapVal = [];
+                
 
                 t0 = tic;
                 
@@ -1442,15 +1444,15 @@ classdef SpikeGrid < most.Model
                 end
                 t2 = toc(t0);
                 
-                
                 %Filter data if needed
                 if ~isempty(obj.filterCoefficients)
                     [newData,obj.filterCondition] = filter(obj.filterCoefficients{2},obj.filterCoefficients{1},double(newData),obj.filterCondition); %Convert to double..but still in A/D count values, not voltages
                 end
-                
+
                 if ~isempty(obj.waveformWrap)
-                    for iter= 1:obj.sglChanSubset
-                        obj.partialWaveformBuffer{end, iter} = [obj.partialWaveformBuffer{end, iter} newData(1:obj.waveformWrap(end),iter)];
+                    for hiter=1:numel(obj.neuralChanAcqList)
+                        iter = obj.sglChanSubset(hiter)+1;
+                        obj.partialWaveformBuffer{end, iter} = [obj.partialWaveformBuffer{end, iter};newData(1:obj.waveformWrap(end),iter)];
                     end
                 end
                 
@@ -1527,6 +1529,11 @@ classdef SpikeGrid < most.Model
                     obj.zprvPlotNewSpikes();
                 end
                 t7 = toc(t0);
+                
+                    disp(newWaveformWrapVal)
+                if ~isempty(newWaveformWrapVal)
+                    obj.waveformWrap(end+1) = newWaveformWrapVal;
+                end
                 
                 %Update current RMS and mean values, if needed
                 if (rmsMultipleThresh || obj.filterWindow(1) == 0) && ...
@@ -1698,11 +1705,9 @@ classdef SpikeGrid < most.Model
                                     if stimulusTriggeredWaveformMode
                                         if h==1
                                             newLength = size(obj.partialWaveformBuffer,1) + 1;
-                                            obj.waveformWrap(end+1) = idxWindowMax(end) - size(obj.rawDataBuffer,1); %TODO CHECK FOR +1 NECESSARY?
-                                        size(idxWindowMin)
-                                        size(idxWindowMax)
+                                            newWaveformWrapVal = idxWindowMax(end) - size(obj.rawDataBuffer,1); %TODO CHECK FOR +1 NECESSARY?
                                         end
-                                        obj.partialWaveformBuffer{newLength,i} = obj.rawDataBuffer(idxWindowMin:idxWindowMax,h);
+                                        obj.partialWaveformBuffer{newLength,i} = obj.rawDataBuffer(idxWindowMin(1):end,h);
                                     else
                                         %TODO: Handle waveformWrap for spike-triggered case
                                         fprintf('waveform #%d out of bounds, channel #%d, idxWindow min(1): %d, idxWindow min(end): %d, idxWindow max(1): %d, idxWindow max(end): %d\n', ...
@@ -2303,15 +2308,18 @@ classdef SpikeGrid < most.Model
                     znstPlotWaveform(obj.partialWaveformBuffer{1,i});
                     obj.waveformWrap(1) = [];
                     obj.partialWaveformBuffer(1,:) = [];
-                else                                   
+                else                    
                     for j=1:numNewSpikes
-                        znstPlotWaveform(obj.spikeData{i}.waveforms{j})
+                        znstPlotWaveform(obj.spikeData{i}.waveforms{j});
                     end
                 end                    
       
             end            
             
             function znstPlotWaveform(waveform)
+                if isempty(waveform)
+                    return;
+                end
                 assert(length(waveform) == length(xData),'Waveform data for chan %d (%d), spike %d not of expected length (%d)\n',i,length(waveform),j,length(xData));
                 
                 %Scale waveform from A/D units to target units, applying mean subtraction if thresholdType='rmsMultiple'
