@@ -64,7 +64,7 @@ handles.pcRareAdjustProps = most.gui.control.PropertyTable(handles.tblRareAdjust
 handles.pcRareAdjustProps.alphabetize = false;
 set(handles.tblRareAdjustProps,'UserData',handles.pcRareAdjustProps); % xxx this does not get set automatically by Controller probably b/c there is no "propbinding"
 
-most.gui.AdvancedPanelToggler.init(hObject,handles.tbShowAllProps,16);
+most.gui.AdvancedPanelToggler.init(hObject,handles.tbShowAllProps,32);
 
 
 guidata(hObject, handles);
