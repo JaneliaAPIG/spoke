@@ -1399,25 +1399,13 @@ classdef SpikeGrid < most.Model
                 %newData = FetchNi(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglChanSubset); 
                 scansToRead = 20000;
                 [newData derp]= FetchLatestNi(obj.hSGL,scansToRead,obj.sglChanSubset);
-                figure(100);
-                if obj.switchit
-                    subplot(2,1,1);
-                    cla;
-                    obj.switchit=false;
-                else
-                    subplot(2,1,2);
-                    cla;
-                    obj.switchit=true;
-                end
                 
                 obj.currentSamples = derp;
                 foo = obj.currentSamples - obj.previousSamples;
-                fprintf('actual new samples: %d\n',foo);
+                fprintf('actual new samples: %d, obj.currentSamples: %d, obj.previousSamples: %d\n',foo, obj.currentSamples, obj.previousSamples);
                 scansToRead = foo;
                 obj.previousSamples = obj.currentSamples;
-                if foo < 20000
-                   % plot(newData(1:foo,194));
-                end
+               
                 % ******************************************************************************************
                 % ******************************************************************************************
                 % ******************************************************************************************
@@ -1521,11 +1509,7 @@ classdef SpikeGrid < most.Model
                 %Update current baseline stats values (mean & RMS), if needed
                 if (rmsMultipleThresh || obj.filterWindow(1) == 0) && ...
                         (obj.bufScanNumEnd - obj.baselineRMSLastScan) > obj.baselineStatsRefreshPeriodScans % enough time has elapsed since last RMS sampling
-                    fprintf('updating viewport due to changing RMS baseline.\n');
                     znstUpdateBaselineStats(newSpikeScanNums,bufStartScanNum);
-                    figure(100);
-                    hold off;
-
                 end
                 t8 = toc(t0);
                 
@@ -1727,14 +1711,9 @@ classdef SpikeGrid < most.Model
                 %stimIdx = find((diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > triggerThreshVal) == 1,1);
                 stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > triggerThreshVal);
 
-                if ~isempty(stimIdx)
-                    fprintf('new set of data!!!\n');
-                end
-                
                 while ~isempty(stimIdx)
-                    %figure(100);
-                    if stimIdx == stimIdx % Discard false stimuli detected on the first sample.
-                        fprintf('stimIdx: %s\n',mat2str(stimIdx));
+                fprintf('stimIdx: %s\n',mat2str(stimIdx));
+                    if stimIdx ~= stimIdx % Discard false stimuli detected on the first sample.
                         %fprintf('size of raw data buffer: %s\n',mat2str(size(obj.rawDataBuffer)));
 
                         newStimScanNum = bufStartScanNum + stimIdx(1) - 1;
@@ -1754,8 +1733,7 @@ classdef SpikeGrid < most.Model
                         dfprintf('Detected stim! stimTotalCount: %d stimScanNum: %d stimWindowStartScanNum: %d stimWindowEndScanNum: %d bufStartScanNum: %d\n',...
                             obj.stimTotalCount,obj.stimScanNums(end),obj.stimWindowStartScanNums(end),obj.stimWindowEndScanNums(end),bufStartScanNum);
                     end
-                    %plot(temp1);
-                    hold on;
+                    
                     % remove first element of stimIdx
                     stimIdx(1) = [];
                 end
@@ -1916,14 +1894,14 @@ classdef SpikeGrid < most.Model
                 %Extract rawDataBuffer data, excluding last spike-window post
                 %time (not yet processed for spikes), and excluding just-detected
                 %spike windows
-                
+                %fprintf('bufStartScanNum: %d\n',bufStartScanNum);
                 %newRmsData = cell(numDispChans,1);
                 %batchLength = zeros(numDispChans,1);
                 rmsDataIdxs = {1:(size(obj.rawDataBuffer,1)-obj.horizontalRangeScans(2))};
                 rmsDataIdxs = repmat(rmsDataIdxs,numNeuralChans,1);
 
-                firstPassMode = isempty(newSpikeScanNums); %Handle first pass at RMS detection, when there are no detected spikes yet
-
+                %firstPassMode = isempty(newSpikeScanNums); %Handle first pass at RMS detection, when there are no detected spikes yet
+                firstPassMode = all(cellfun('isempty',newSpikeScanNums) == 1);
                 if ~firstPassMode
                     %for i=1:numNeuralChans
                     %for i=1:numel(obj.sglChanSubset)
@@ -1933,6 +1911,7 @@ classdef SpikeGrid < most.Model
                         
                         %rmsDataIdxs{i} = 1:(size(obj.rawDataBuffer,1)-obj.horizontalRangeScans(2));
                         
+                        %fprintf('newSpikeScanNums{i}: %d, bufStartScanNum: %d\n',newSpikeScanNums{i},bufStartScanNum);
                         spikeScanIdxs = newSpikeScanNums{i} - bufStartScanNum + 1;  %Convert scan numbers to spike-data-buffer indices
                         
                         %Exclude just-detected spike windows
@@ -2504,7 +2483,6 @@ classdef SpikeGrid < most.Model
             if redrawThresholdLines
                 obj.zprvDrawThresholdLines();
             end
-
         end
         
         function ylim = zprvverticalRangeRaster2YLim(obj,val)
