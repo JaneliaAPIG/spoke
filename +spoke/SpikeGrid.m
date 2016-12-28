@@ -1627,7 +1627,7 @@ classdef SpikeGrid < most.Model
                 
                 %newWaveformOffsets is a scalar in
                 %stimulusTriggeredWaveformMode;and a (nulti-channel) cell
-                %array of (multi-spike) variable-length arrays in standard
+                %array of (multi-spike) variable-length arrays in
                 %spike-triggered waveform mode
                 
                 scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
@@ -1828,9 +1828,10 @@ classdef SpikeGrid < most.Model
             
             function znstDetectStimulus(bufStartScanNum)
                        
+                %Don't detect stimulus start within horizontal range (waveform or raster sweep) defined by last detected stimulus
                 if isempty(obj.stimLastEventScanNumWindow)
                     spikeDataBufStartIdx = 1;
-                elseif obj.stimLastEventScanNumWindow(2) >= bufStartScanNum %Don't detect stimulus start within window (waveform or raster sweep) defined by last stimulus
+                elseif obj.stimLastEventScanNumWindow(2) >= bufStartScanNum 
                     spikeDataBufStartIdx = obj.stimLastEventScanNumWindow(2) - bufStartScanNum + 1;
                 else
                     spikeDataBufStartIdx = 1;
