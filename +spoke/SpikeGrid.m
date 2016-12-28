@@ -1626,7 +1626,7 @@ classdef SpikeGrid < most.Model
             function znstStoreNewWaveforms(newWaveformOffsets,bufStartScanNum)
                 
                 %newWaveformOffsets is a scalar in
-                %stimulusTriggeredWaveformMode;and a (nulti-channel) cell
+                %stimulusTriggeredWaveformMode;and a (multi-channel) cell
                 %array of (multi-spike) variable-length arrays in
                 %spike-triggered waveform mode
                 
@@ -1641,7 +1641,10 @@ classdef SpikeGrid < most.Model
                 try
                      for h=1:numel(obj.neuralChanAcqList)
                          i = obj.sglChanSubset(h)+1;
-                        %TODO: Where appropriate (e.g. most waveform display cases), short-circuit storage if not being displayed
+                         %TODO: Where possible (in most waveform display
+                         %cases), short-circuit storage for channels not
+                         %being displayed, to reduce processing time
+                         %%performance
                         
                         if stimulusTriggeredWaveformMode
                             numNewSpikes = length(newWaveformOffsets);
