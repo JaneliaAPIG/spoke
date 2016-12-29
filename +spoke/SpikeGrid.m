@@ -1500,6 +1500,10 @@ classdef SpikeGrid < most.Model
                     % detection.
                     obj.stimScanNums=[];
                     chanNewSpikes=[];
+                    for iter=1:length(obj.stimEventTypes_)
+                      chanNewSpikes.(obj.stimEventTypes_{iter}) = zeros(numNeuralChans,1);
+                    end
+                    
                     znstDetectStimulus(bufStartScanNum);
                     
                     %newStimScanNums = setdiff(obj.stimScanNums,oldStimScanNums);
@@ -1901,7 +1905,7 @@ classdef SpikeGrid < most.Model
                 %and stored. Spikes not associated with stimulus are cleared. If
                 %event-types are specified, spikes are tagged with name of
                 %associated stimulus event type.
-                
+               
                 for i=1:length(obj.stimEventTypes_)
                     chanNewSpikes.(obj.stimEventTypes_{i}) = zeros(numNeuralChans,1);
                 end
@@ -1918,11 +1922,11 @@ classdef SpikeGrid < most.Model
                     taggedNewSpike = false;
                     spikesToClear = [];
                     taggedSpikeIdxsStruct = taggedSpikeIdxStructInit;
-                    fprintf('b: %d    ',b);
+%                    fprintf('b: %d    ',b);
                     %Loop through spikes from most recent backwards, tagging event-type if possible
-                    fprintf('length of spikedata: %d\n',length(obj.spikeData{c}.scanNums));
+%                    fprintf('length of spikedata: %d\n',length(obj.spikeData{c}.scanNums));
                     for spikeIdx = length(obj.spikeData{c}.scanNums):-1:1
-                        fprintf('hello!!!! %d\n',spikeIdx);
+%                        fprintf('hello!!!! %d\n',spikeIdx);
                         tmp1 =tic;
                         
                         %Reached previously-tagged spikes -- stop loop
@@ -1936,7 +1940,7 @@ classdef SpikeGrid < most.Model
                         %Find associated stim spike
                         spikeScanNum = obj.spikeData{c}.scanNums(spikeIdx);
                         
-                        fprintf('spikeScanNum: %d\n',spikeScanNum);
+                       % fprintf('spikeScanNum: %d\n',spikeScanNum);
                         
                         stimIdx = find(spikeScanNum >= obj.stimWindowStartScanNums,1,'last');
                         
@@ -2136,6 +2140,7 @@ classdef SpikeGrid < most.Model
             plotCount = 0;
             for c=obj.tabChanNumbers
                 plotCount = plotCount + 1;
+                
                 
                 %if isempty(obj.spikeData{j}) || chanNewSpikes(j) == 0 || isempty(obj.spikeData{j}.stimEventTypeStruct)
                 if isempty(obj.spikeData{c}.scanNums) || (~plotAllSpikes && all(structfun(@(x)x(c)==0,chanNewSpikes)))
