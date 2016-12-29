@@ -337,8 +337,8 @@ classdef SpikeGrid < most.Model
             gridPanelSize = 1/gridDimension;
             
             %Create waveform & raster grids
-            obj.hFigs.waveform = most.idioms.figureScaled(1.6,'Name','Spoke Waveform Grid');
-            obj.hFigs.raster = most.idioms.figureScaled(1.6,'Name','Spoke Raster Grid');
+            obj.hFigs.waveform = most.idioms.figureScaled(1.6,'Name','Spoke Waveform Grid','CloseRequestFcn',@(src,evnt)set(src,'Visible','off'));
+            obj.hFigs.raster = most.idioms.figureScaled(1.6,'Name','Spoke Raster Grid','CloseRequestFcn',@(src,evnt)set(src,'Visible','off'));
             obj.hFigs.psth = most.idioms.figureScaled(1.6,'Name','Spoke PSTH Grid','Visible','off','CloseRequestFcn',@(src,evnt)set(src,'Visible','off'));
             structfun(@(hFig)set(hFig,'NumberTitle','off','Menubar','none','Toolbar','none'),obj.hFigs);
             
@@ -405,14 +405,7 @@ classdef SpikeGrid < most.Model
                 
             end
             
-            currPosn = obj.gridFigPosition;
-            set(obj.hFigs.(val),'Visible','on','Position',currPosn);
-            switch val
-                case 'waveform'
-                    set([obj.hFigs.raster obj.hFigs.psth],'Visible','off');
-                case 'raster'
-                    set(obj.hFigs.waveform,'Visible','off');
-            end
+            obj.zprvShowDisplayFig();
             
             obj.displayMode = val;
             
@@ -1016,8 +1009,7 @@ classdef SpikeGrid < most.Model
             obj.zprvResetAcquisition();
             
             %Clear previous lines
-            handlesToClear = [];
-            
+            handlesToClear = [];                                               
             switch obj.displayMode
                 case 'waveform'
                     obj.zprvClearPlots('waveform');
@@ -1032,6 +1024,8 @@ classdef SpikeGrid < most.Model
                     obj.zprvClearPlots({'raster' 'psth'});
             end
             
+            %Show display fig 
+            obj.zprvShowDisplayFig();            
             
             %Display-type specific initialization
             switch obj.displayMode
@@ -2352,6 +2346,20 @@ classdef SpikeGrid < most.Model
             %Axes properties for spoke waveform grid axes
             set(hAx,'XTick',0,'YTick',0,'XGrid','on','YGrid','on','XTickLabel','','YTickLabel','');
         end
+        
+        
+        function zprvShowDisplayFig(obj)
+            currPosn = obj.gridFigPosition;
+            displayType = obj.displayMode;
+            set(obj.hFigs.(displayType),'Visible','on','Position',currPosn);
+            switch displayType
+                case 'waveform'
+                    set([obj.hFigs.raster obj.hFigs.psth],'Visible','off');
+                case 'raster'
+                    set(obj.hFigs.waveform,'Visible','off');
+            end
+        end
+            
         
         %     function zprvResetThreshold(obj)
         %
