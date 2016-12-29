@@ -1498,11 +1498,11 @@ classdef SpikeGrid < most.Model
                     %znstDetectStimulus(bufStartScanNum,changedFileName);
                     % Erase all stimScanNums before running stimulus
                     % detection.
-                    obj.stimScanNums=[];
-                    chanNewSpikes=[];
-                    for iter=1:length(obj.stimEventTypes_)
-                      chanNewSpikes.(obj.stimEventTypes_{iter}) = zeros(numNeuralChans,1);
-                    end
+%                     obj.stimScanNums=[];
+%                     chanNewSpikes=[];
+%                     for iter=1:length(obj.stimEventTypes_)
+%                       chanNewSpikes.(obj.stimEventTypes_{iter}) = zeros(numNeuralChans,1);
+%                     end
                     
                     znstDetectStimulus(bufStartScanNum);
                     
@@ -1512,9 +1512,9 @@ classdef SpikeGrid < most.Model
                         % fprintf('# of stimScanNums: %d\n ',length(obj.stimScanNums));
                         znstClassifyStimulus(bufStartScanNum); %Classify stimulus event type, if possible
                         
-                        chanNewSpikes = znstTagSpikes(); %Tag spike data with stimulus/event info, as needed/possible
                         %chanNewSpikes.allstim
                     end
+                    chanNewSpikes = znstTagSpikes(); %Tag spike data with stimulus/event info, as needed/possible
                 end
                 t6 = toc(t0);
                 
