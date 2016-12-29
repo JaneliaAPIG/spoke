@@ -24,9 +24,9 @@ classdef AdvancedPanelToggler
             orientation = most.gui.AdvancedPanelToggler.getToggleOrientation(hToggleCtrl);
 
             % write toggle state to hFig userData
-            currentUserData = get(hFig,'UserData');            
+            currentUserData = get(hFig,'UserData');   
             assert(isempty(currentUserData) || ...
-                isstruct(currentUserData) && ~isfield(currentUserData,'toggle'), ...
+                (isstruct(currentUserData) && ~isfield(currentUserData,'toggle')), ...
                 'Unexpected figure userdata.');
             
             currentUserData.toggle.toggleCtrlTag = get(hToggleCtrl,'Tag');

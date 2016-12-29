@@ -27,4 +27,6 @@ hGridCtl = spoke.SpikeGridController(hGrid);
 assignin('base','hGrid',hGrid);
 assignin('base','hGridCtl',hGridCtl);
 
+set(hGridCtl.hGUIsArray,'CloseRequestFcn',@(src,evnt)hGrid.delete); % For the momnet GUIs owned by Controller are never really killed
+
 hGrid.initialize();

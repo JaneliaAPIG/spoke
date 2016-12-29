@@ -22,7 +22,7 @@ function varargout = SpikeGrid(varargin)
 
 % Edit the above text to modify the response to help SpikeGrid
 
-% Last Modified by GUIDE v2.5 16-Jul-2012 18:21:14
+% Last Modified by GUIDE v2.5 28-Dec-2016 20:52:32
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -464,3 +464,35 @@ function etPSTHAmpRange_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+
+% --- Executes when user attempts to close figure1.
+function figure1_CloseRequestFcn(hObject, eventdata, handles)
+% hObject    handle to figure1 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: delete(hObject) closes the figure
+handles.hModel.quit();
+delete(hObject);
+
+
+% --------------------------------------------------------------------
+function mnuViewMenu_Callback(hObject, eventdata, handles)
+% hObject    handle to mnuViewMenu (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --------------------------------------------------------------------
+function mnuViewWaveformDisplay_Callback(hObject, eventdata, handles)
+% hObject    handle to mnuViewWaveformDisplay (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --------------------------------------------------------------------
+function mnuViewRasterDisplay_Callback(hObject, eventdata, handles)
+% hObject    handle to mnuViewRasterDisplay (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)

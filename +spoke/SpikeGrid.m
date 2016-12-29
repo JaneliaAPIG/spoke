@@ -337,8 +337,8 @@ classdef SpikeGrid < most.Model
             gridPanelSize = 1/gridDimension;
             
             %Create waveform & raster grids
-            obj.hFigs.waveform = most.idioms.figureScaled(1.6,'Name','Spoke Waveform Grid');
-            obj.hFigs.raster = most.idioms.figureScaled(1.6,'Name','Spoke Raster Grid');
+            obj.hFigs.waveform = most.idioms.figureScaled(1.6,'Name','Spoke Waveform Grid','CloseRequestFcn',@(src,evnt)set(src,'Visible','off'));
+            obj.hFigs.raster = most.idioms.figureScaled(1.6,'Name','Spoke Raster Grid','CloseRequestFcn',@(src,evnt)set(src,'Visible','off'));
             obj.hFigs.psth = most.idioms.figureScaled(1.6,'Name','Spoke PSTH Grid','Visible','off','CloseRequestFcn',@(src,evnt)set(src,'Visible','off'));
             structfun(@(hFig)set(hFig,'NumberTitle','off','Menubar','none','Toolbar','none'),obj.hFigs);
             
@@ -405,14 +405,7 @@ classdef SpikeGrid < most.Model
                 
             end
             
-            currPosn = obj.gridFigPosition;
-            set(obj.hFigs.(val),'Visible','on','Position',currPosn);
-            switch val
-                case 'waveform'
-                    set([obj.hFigs.raster obj.hFigs.psth],'Visible','off');
-                case 'raster'
-                    set(obj.hFigs.waveform,'Visible','off');
-            end
+            obj.zprvShowDisplayFig();
             
             obj.displayMode = val;
             
@@ -1016,8 +1009,7 @@ classdef SpikeGrid < most.Model
             obj.zprvResetAcquisition();
             
             %Clear previous lines
-            handlesToClear = [];
-            
+            handlesToClear = [];                                               
             switch obj.displayMode
                 case 'waveform'
                     obj.zprvClearPlots('waveform');
@@ -1032,6 +1024,8 @@ classdef SpikeGrid < most.Model
                     obj.zprvClearPlots({'raster' 'psth'});
             end
             
+            %Show display fig 
+            obj.zprvShowDisplayFig();            
             
             %Display-type specific initialization
             switch obj.displayMode
@@ -1519,24 +1513,13 @@ classdef SpikeGrid < most.Model
                 
                 %STAGE 6: (Raster mode only) Detect stimulus & update reduced data
                 % TODO: Review if this could be moved to STAGE 4 (as STAGE 4b)
-                if rasterDisplayMode % || stimulusTriggeredWaveformMode
-                    %oldStimScanNums = obj.stimScanNums;
-                    %znstDetectStimulus(bufStartScanNum,changedFileName);
-                    % Erase all stimScanNums before running stimulus
-                    % detection.
-                    obj.stimScanNums=[];
-                    chanNewSpikes=[];
+                %Detect, record, classify stimulus start, as needed
+                if rasterDisplayMode
                     znstDetectStimulus(bufStartScanNum);
-                    
-                    %newStimScanNums = setdiff(obj.stimScanNums,oldStimScanNums);
-                    %assert(all(newStimScanNums > bufStartScanNum));
-                    if ~isempty(obj.stimScanNums) && ~stimulusTriggeredWaveformMode
-                        % fprintf('# of stimScanNums: %d\n ',length(obj.stimScanNums));
+                    if ~isempty(obj.stimScanNums)
                         znstClassifyStimulus(bufStartScanNum); %Classify stimulus event type, if possible
-                        
-                        chanNewSpikes = znstTagSpikes(); %Tag spike data with stimulus/event info, as needed/possible
-                        %chanNewSpikes.allstim
                     end
+                    chanNewSpikes = znstTagSpikes(); %Tag spike data with stimulus/event info, as needed/possible
                 end
                 t6 = toc(t0);
                 
@@ -1934,7 +1917,7 @@ classdef SpikeGrid < most.Model
                 %and stored. Spikes not associated with stimulus are cleared. If
                 %event-types are specified, spikes are tagged with name of
                 %associated stimulus event type.
-                
+               
                 for i=1:length(obj.stimEventTypes_)
                     chanNewSpikes.(obj.stimEventTypes_{i}) = zeros(numNeuralChans,1);
                 end
@@ -1951,11 +1934,12 @@ classdef SpikeGrid < most.Model
                     taggedNewSpike = false;
                     spikesToClear = [];
                     taggedSpikeIdxsStruct = taggedSpikeIdxStructInit;
-                    fprintf('b: %d    ',b);
+%                    fprintf('b: %d    ',b);
                     %Loop through spikes from most recent backwards, tagging event-type if possible
-                    fprintf('length of reducedData: %d\n',length(obj.reducedData{c}.scanNums));
+
+%                    fprintf('length of spikedata: %d\n',length(obj.spikeData{c}.scanNums));
                     for spikeIdx = length(obj.reducedData{c}.scanNums):-1:1
-                        fprintf('hello!!!! %d\n',spikeIdx);
+%                        fprintf('hello!!!! %d\n',spikeIdx);
                         tmp1 =tic;
                         
                         %Reached previously-tagged spikes -- stop loop
@@ -1969,7 +1953,7 @@ classdef SpikeGrid < most.Model
                         %Find associated stim spike
                         spikeScanNum = obj.reducedData{c}.scanNums(spikeIdx);
                         
-                        fprintf('spikeScanNum: %d\n',spikeScanNum);
+                       % fprintf('spikeScanNum: %d\n',spikeScanNum);
                         
                         stimIdx = find(spikeScanNum >= obj.stimWindowStartScanNums,1,'last');
                         
@@ -2169,6 +2153,7 @@ classdef SpikeGrid < most.Model
             for c=obj.tabChanNumbers
                 plotCount = plotCount + 1;
                 
+
                 %if isempty(obj.reducedData{j}) || chanNewSpikes(j) == 0 || isempty(obj.reducedData{j}.stimEventTypeStruct)
                 if isempty(obj.reducedData{c}.scanNums) || (~plotAllSpikes && all(structfun(@(x)x(c)==0,chanNewSpikes)))
                     continue;
@@ -2378,6 +2363,20 @@ classdef SpikeGrid < most.Model
             %Axes properties for spoke waveform grid axes
             set(hAx,'XTick',0,'YTick',0,'XGrid','on','YGrid','on','XTickLabel','','YTickLabel','');
         end
+        
+        
+        function zprvShowDisplayFig(obj)
+            currPosn = obj.gridFigPosition;
+            displayType = obj.displayMode;
+            set(obj.hFigs.(displayType),'Visible','on','Position',currPosn);
+            switch displayType
+                case 'waveform'
+                    set([obj.hFigs.raster obj.hFigs.psth],'Visible','off');
+                case 'raster'
+                    set(obj.hFigs.waveform,'Visible','off');
+            end
+        end
+            
         
         %     function zprvResetThreshold(obj)
         %
