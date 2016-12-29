@@ -1493,26 +1493,10 @@ classdef SpikeGrid < most.Model
                 t5 = toc(t0);
 				
                 %Detect, record, classify stimulus start, as needed
-                if rasterDisplayMode % || stimulusTriggeredWaveformMode 
-                    %oldStimScanNums = obj.stimScanNums;
-                    %znstDetectStimulus(bufStartScanNum,changedFileName);
-                    % Erase all stimScanNums before running stimulus
-                    % detection.
-%                     obj.stimScanNums=[];
-%                     chanNewSpikes=[];
-%                     for iter=1:length(obj.stimEventTypes_)
-%                       chanNewSpikes.(obj.stimEventTypes_{iter}) = zeros(numNeuralChans,1);
-%                     end
-                    
+                if rasterDisplayMode
                     znstDetectStimulus(bufStartScanNum);
-                    
-                    %newStimScanNums = setdiff(obj.stimScanNums,oldStimScanNums);
-                    %assert(all(newStimScanNums > bufStartScanNum));
-                    if ~isempty(obj.stimScanNums) && ~stimulusTriggeredWaveformMode
-                        % fprintf('# of stimScanNums: %d\n ',length(obj.stimScanNums));
+                    if ~isempty(obj.stimScanNums)
                         znstClassifyStimulus(bufStartScanNum); %Classify stimulus event type, if possible
-                        
-                        %chanNewSpikes.allstim
                     end
                     chanNewSpikes = znstTagSpikes(); %Tag spike data with stimulus/event info, as needed/possible
                 end
