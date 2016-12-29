@@ -1469,15 +1469,15 @@ classdef SpikeGrid < most.Model
                 t3 = toc(t0);
                 
                 %STAGE 4: Detect stimulus or spike(s) within data buffer
+                newSpikeScanNums = cell(numNeuralChans,1);
                 
                 %STAGE 4 - BRANCH 1: Detect spike(s) within data buffer
                 %  (modes: spike-triggered waveform & raster)
                 %  Excludes spikes during:
                 %   * 'refractory period'(discarded)
                 %   * final 'post-trigger' time, as spec'd by horizontalRange  (processed during next timer period)
-                if ~stimulusTriggeredWaveformMode
-                    newSpikeScanNums = cell(numNeuralChans,1);
-                    
+                
+                if ~stimulusTriggeredWaveformMode                                        
                     if rmsMultipleInitializing %Handle case where no RMS data has been computed yet
                         %obj.rawDataBuffer((obj.refreshPeriodAvgScans+1):end,:) = []; %VVV062812: Is this needed/wanted?
                         
@@ -1676,8 +1676,6 @@ classdef SpikeGrid < most.Model
                         end
                         numNewTimestamps = length(timestampOffsets_);
                         
-                        idxWindowMin = scanWindowRelative + timestampOffsets_(1) - bufStartScanNum;
-                        idxWindowMax = scanWindowRelative + timestampOffsets_(numNewTimestamps) - bufStartScanNum;
                         
                         %Update spike counts
                         obj.spikeCount(i) = obj.spikeCount(i) + numNewTimestamps; %TODO: rename spikeCount to generalize for stim-triggered waveform mode; OR explicitly don't update this var in that mode
@@ -1718,7 +1716,9 @@ classdef SpikeGrid < most.Model
                 
                 
                 function znstStoreReducedData_Waveforms()
-                    
+                    idxWindowMin = scanWindowRelative + timestampOffsets_(1) - bufStartScanNum;
+                    idxWindowMax = scanWindowRelative + timestampOffsets_(numNewTimestamps) - bufStartScanNum;
+
                     for j=1:numNewTimestamps
                         if stimulusTriggeredWaveformMode
                             scanWindow = scanWindowRelative + timestampOffsets_;
