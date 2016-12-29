@@ -138,6 +138,7 @@ classdef SpikeGrid < most.Model
         baselineMean; %Array of mean values, one per channel, computed from all non-spike-window scans from within last baselineRMSTime
         baselineRMSLastScan = 0; %Last scan number at which threshold RMS value was updated
         
+        reducedData = {}; %Cell array, one cell per available neural channel, of structures storing reduced data from the raw data (timestamps, waveform snippets, stimulus-tagged timestamps), based on detected stimuli and/or spike(s)
         spikeCount = []; %Scalar array specifying number of spikes detected per channel since start()
         lastPlottedSpikeCount = []; %Scalar array specifying the spike count, for each channel that's been last plotted
         lastPlottedSpikeCountSinceClear = []; %Scalar array specificying the spike count, for each channel that's been last plotted (cleared every time a channel is cleared) - only used for 'all' plot clear mode.
@@ -270,6 +271,7 @@ classdef SpikeGrid < most.Model
             obj.voltsPerBitAux = (aiRangeMax / niMAGain) / ( 2^(obj.SGL_BITS_PER_SAMPLE - 1));
             obj.refreshRate = obj.refreshRate; %apply default value
             
+            obj.zprvResetReducedData();
                         
             %Initialize a default display for appearances (some aspects gets overridden by processing on start())
 %             obj.sglChanSubset = GetChannelSubset(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
@@ -415,6 +417,7 @@ classdef SpikeGrid < most.Model
             obj.displayMode = val;
             
             %Side-effects
+            obj.zprvResetReducedData();
             obj.tabDisplayed = obj.tabDisplayed;
             
         end
@@ -1500,22 +1503,18 @@ classdef SpikeGrid < most.Model
                 t4 = toc(t0);
 					
 				%STAGE 5: Store reduced data (waveform snippets, timestamps) from current batch of raw processed data, as needed for subsequent plotting stages and subsequent timer periods                
+                % Raster & Spike-triggered Waveform modes: store detected spike scan numbers
+                % Stimulus-triggered Waveform mode: store detected stimulus scan numbers                 
+                % Waveform modes: store waveform snippets
+                % also: initialize stimulus spike-tagging storage for Raster mode (TODO:  Review if STAGE 6 could be combined with STAGE 4, updating this step accordingly)
+                
                 if ~stimulusTriggeredWaveformMode 
                     timestampOffsets = newSpikeScanNums;
                 else
                     timestampOffsets = obj.stimScanNums;
                 end
                 
-                %STAGE 5a: Store timestamps 
-                % Raster & Spike-triggered Waveform modes: store detected spike scan numbers
-                % Stimulus-triggered Waveform mode: store detected stimulus scan numbers                 
-                % also: initialize stimulus spike-tagging storage for Raster mode (TODO:  Review if STAGE 6 could be combined with STAGE 4, updating this step accordingly)
-                znstStoreReducedData_Timestamps(timestampOffsets,bufStartScanNum); %TODO: Give this a different function & function name for raster mode. There is no waveform storage
-                
-                %STAGE 5b: Store waveform snippets (for waveform display modes)
-                if waveformDisplay
-                    znstStoreReducedData_Waveforms(timestampOffsets,bufStartScanNum); %TODO: Give this a different function & function name for raster mode. There is no waveform storage
-                end                
+                znstStoreReducedData(timestampOffsets,bufStartScanNum);                                
                 t5 = toc(t0);
 				
                 %STAGE 6: (Raster mode only) Detect stimulus & update reduced data
@@ -1645,7 +1644,7 @@ classdef SpikeGrid < most.Model
                 %dfprintf('after augment: rawdatabuffer size: %d\n', size(obj.rawDataBuffer,1));
             end
             
-            function znstStoreReducedData_Timestamps(timestampOffsets,bufStartScanNum)
+            function znstStoreReducedData(timestampOffsets,bufStartScanNum)
                 
                 %timestampOffsets is a scalar in
                 %stimulusTriggeredWaveformMode;and a (multi-channel) cell
@@ -1669,41 +1668,97 @@ classdef SpikeGrid < most.Model
                         %time
                         
                         if stimulusTriggeredWaveformMode
-                            numNewSpikes = length(timestampOffsets);
+                            timestampOffsets_ = timestampOffsets;
                         else
-                            numNewSpikes = length(timestampOffsets{i});
+                            timestampOffsets_ = timestampOffsets{i};
                         end
+                        numNewTimestamps = length(timestampOffsets_);
                         
                         %Update spike counts
-                        obj.spikeCount(i) = obj.spikeCount(i) + numNewSpikes;
+                        obj.spikeCount(i) = obj.spikeCount(i) + numNewTimestamps; %TODO: rename spikeCount to generalize for stim-triggered waveform mode; OR explicitly don't update this var in that mode
                         
                         %In waveform display modes - clear all previous channel data
                         if waveformDisplay
                             obj.reducedData{i}.scanNums = [];
-                            obj.reducedData{i}.waveforms = cell(numNewSpikes,1);
+                            obj.reducedData{i}.waveforms = cell(numNewTimestamps,1);
                         end
                         
-                        if numNewSpikes == 0
+                        if numNewTimestamps == 0
                             continue;
                         end
                         
-                        %Store new spike scan numbers
+                        %Store timestamp data
                         if stimulusTriggeredWaveformMode
                             obj.reducedData{i}.scanNums = [obj.reducedData{i}.scanNums timestampOffsets];
                         elseif waveformDisplay %spike-triggered waveform mode
                             obj.reducedData{i}.scanNums = timestampOffsets{i};
                         else %raster mode
                             obj.reducedData{i}.scanNums = [obj.reducedData{i}.scanNums timestampOffsets{i}];
-                            obj.reducedData{i}.stimRelScanNums = [obj.reducedData{i}.stimRelScanNums zeros(1,numNewSpikes)];
-                            obj.reducedData{i}.stimNums = [obj.reducedData{i}.stimNums zeros(1,numNewSpikes)];
-                            obj.reducedData{i}.stimEventTypes = [obj.reducedData{i}.stimEventTypes repmat({''},1,numNewSpikes)];
-                        end                                 
-                    end
-                    
+                            obj.reducedData{i}.stimRelScanNums = [obj.reducedData{i}.stimRelScanNums zeros(1,numNewTimestamps)];
+                            obj.reducedData{i}.stimNums = [obj.reducedData{i}.stimNums zeros(1,numNewTimestamps)];
+                            obj.reducedData{i}.stimEventTypes = [obj.reducedData{i}.stimEventTypes repmat({''},1,numNewTimestamps)];
+                        end   
+                        
+                        %Store waveform data
+                        if waveformDisplay
+                            znstStoreReducedData_Waveforms();
+                        end                        
+                        
+                    end                  
+                                        
                 catch ME
                     fprintf(1,'Error: %s\n',ME.message);
                     ME.rethrow();
                 end
+                
+                function znstStoreReducedData_Waveforms()
+                    scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
+                    
+                    for h=1:numel(obj.neuralChanAcqList)
+                        i = obj.sglChanSubset(h)+1;
+                        %TODO: Where possible, short-circuit storage for
+                        %channels not being displayed, to reduce processing
+                        %time                        
+                                                          
+                        idxWindowMin = scanWindowRelative + timestampOffsets_(1) - bufStartScanNum;
+                        idxWindowMax = scanWindowRelative + timestampOffsets_(numNewTimestamps) - bufStartScanNum;
+                        
+                        for j=1:numNewTimestamps
+                            if stimulusTriggeredWaveformMode
+                                scanWindow = scanWindowRelative + timestampOffsets_;
+                            else
+                                scanWindow = scanWindowRelative + timestampOffsets_{i}(j);
+                            end
+                            idxWindow = scanWindow - bufStartScanNum;
+                            
+                            %Store waveform(s) for this channel, checking for edge cases
+                            if find(idxWindow < 1) %'early' waveform in first timer chunk upon start of Spoke execution, before there is any history from prior chunks
+                                waveform = zeros(length(idxWindow),1,'int16');
+                                waveform(idxWindow < 1) = obj.rawDataBuffer(1,h);
+                                waveform(idxWindow >= 1) = obj.rawDataBuffer(idxWindow >= 1,h);
+                                obj.reducedData{i}.waveforms{j} = waveform;
+                            elseif (idxWindowMax(end) > size(obj.rawDataBuffer,1)) %'late' waveform at end of a timer chunk, extending beyond available data
+                                if stimulusTriggeredWaveformMode
+                                    if h==1
+                                        newLength = size(obj.partialWaveformBuffer,1) + 1;
+                                        newWaveformWrapVal = idxWindowMax(end) - size(obj.rawDataBuffer,1); %TODO CHECK FOR +1 NECESSARY?
+                                    end
+                                    obj.partialWaveformBuffer{newLength,i} = obj.rawDataBuffer(idxWindowMin(1):end,h);
+                                else
+                                    %TODO: Handle waveformWrap for spike-triggered case
+                                    fprintf('waveform #%d out of bounds, channel #%d, idxWindow min(1): %d, idxWindow min(end): %d, idxWindow max(1): %d, idxWindow max(end): %d\n', ...
+                                        j, i, idxWindowMin(1), idxWindowMin(end), idxWindowMax(1), idxWindowMin(end) );
+                                end
+                            else
+                                obj.reducedData{i}.waveforms{j} = obj.rawDataBuffer(idxWindow,h);
+                            end                                                       
+                            
+                        end
+                    end
+                    
+                end
+
+                
             end
             
             
@@ -1723,19 +1778,20 @@ classdef SpikeGrid < most.Model
                         %time                         
                         
                         if stimulusTriggeredWaveformMode
-                            nwo = timestampOffsets;
+                            timestampOffsets_ = timestampOffsets;
                         else
-                            nwo = timestampOffsets{i};
+                            timestampOffsets_ = timestampOffsets{i};
                         end
+                        n_tso = length(timestampOffsets_); %number of timestampOffsets
                         
-                        idxWindowMin = scanWindowRelative + nwo(1) - bufStartScanNum;
-                        idxWindowMax = scanWindowRelative + nwo(numNewSpikes) - bufStartScanNum;
+                        idxWindowMin = scanWindowRelative + timestampOffsets_(1) - bufStartScanNum;
+                        idxWindowMax = scanWindowRelative + timestampOffsets_(n_tso) - bufStartScanNum;
                         
-                        for j=1:numNewSpikes
+                        for j=1:n_tso
                             if stimulusTriggeredWaveformMode
-                                scanWindow = scanWindowRelative + timestampOffsets;
+                                scanWindow = scanWindowRelative + timestampOffsets_;
                             else
-                                scanWindow = scanWindowRelative + timestampOffsets{i}(j);
+                                scanWindow = scanWindowRelative + timestampOffsets_{i}(j);
                             end
                             idxWindow = scanWindow - bufStartScanNum;
                             
@@ -2500,6 +2556,7 @@ classdef SpikeGrid < most.Model
             
         end
         
+        function zprvResetReducedData(obj)
             %Method to clear cached spike data; can be either on acquisition 'reset' or in some cases mid-acquisition
                         
             % TODO: Does this work with channel subsets?
