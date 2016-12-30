@@ -142,9 +142,9 @@ classdef SpikeGridController < most.Controller;
       end                    
     end
     
-    function changedMaxNumSpikesApplied(obj,~,~)
+    function changedMaxNumWaveformsApplied(obj,~,~)
       
-      if obj.hModel.maxNumSpikesApplied
+      if obj.hModel.maxNumWaveformsApplied
         set(obj.hGUIData.SpikeGrid.etThresholdVal,'ForegroundColor',[.8 0 0]);
       else
         set(obj.hGUIData.SpikeGrid.etThresholdVal,'ForegroundColor',[0 0 0]);
@@ -339,7 +339,7 @@ function s = lclInitPropBindings()
   
   s.displayMode = struct('Callback','changedDisplayMode');
   s.filterWindow = struct('Callback','changedFilterWindow');  
-  s.maxNumSpikesApplied = struct('Callback','changedMaxNumSpikesApplied');
+  s.maxNumWaveformsApplied = struct('Callback','changedMaxNumWaveformsApplied');
   s.tabDisplayed = struct('Callback','changedTabDisplayed');    
   s.running = struct('Callback','changedRunning');
   
@@ -347,7 +347,7 @@ function s = lclInitPropBindings()
   s.stimEventTypesDisplayed = struct('Callback','changedStimEventTypesDisplayed');
   
   s.thresholdType = struct('GuiIDs',{{'SpikeGrid','pmThresholdUnits'}});
-  s.spikeAmpUnits = struct('GuiIDs',{{'SpikeGrid','pmSpikeDisplayUnits'}});
+  s.waveformAmpUnits = struct('GuiIDs',{{'SpikeGrid','pmSpikeDisplayUnits'}});
   
   s.psthTimeBin = struct('GuiIDs',{{'SpikeGrid','etTimeBinMs'}},'ViewScaling',1000);  
   s.psthAmpRange = struct('GuiIDs',{{'SpikeGrid','etPSTHAmpRange'}});
@@ -356,11 +356,11 @@ function s = lclInitPropBindings()
   %frequently-adjusted property table bindings
   s.verticalRange = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','char'));
   s.horizontalRange = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','char'));
-  s.spikesPerPlot = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','numeric'));
+  s.waveformsPerPlot = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','numeric'));
 
   s.verticalRangeRaster = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','numeric'));
 
-  s.refreshPeriodMaxSpikeRate = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','numeric'));
+  s.refreshPeriodMaxWaveformRate = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','numeric'));
   s.refreshRate = struct('GuiIDs',{{'SpikeGrid','pcFreqAdjustProps'}},'PropControlData',struct('format','numeric'));
 
 
@@ -374,7 +374,7 @@ function s = lclInitPropBindings()
   s.horizontalRangeRaster = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
   s.verticalRangeRasterInfIncrement = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
 
-  s.spikesPerPlotClearMode = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','char'));
+  s.waveformsPerPlotClearMode = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','char'));
   
   s.baselineStatsRefreshPeriod = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
   %s.baselineStatsRefreshOnRetrigger =  struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
