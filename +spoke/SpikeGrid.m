@@ -1320,8 +1320,7 @@ classdef SpikeGrid < most.Model
             try
                 
                 newWaveformWrapVal = [];
-                
-                
+                                
                 t0 = tic;
                 
                 % cnt = GetScanCount(obj.hSGL);
@@ -1535,12 +1534,13 @@ classdef SpikeGrid < most.Model
                 else
                     obj.zprvUpdateWaveformPlot();
                 end
-                t6 = toc(t0);
-                
-                %TODO: Review if this belongs in STAGE 5
+                                
+                %Housekeeping: Update waveformWrap val, for subsequent timer period
                 if ~isempty(newWaveformWrapVal)
                     obj.waveformWrap(end+1) = newWaveformWrapVal;
                 end
+                
+                t6 = toc(t0);               
                 
                 %STAGE 7: Update current baseline stats values (mean & RMS), if needed
                 if (rmsMultipleThresh || obj.filterWindow(1) == 0) && ...
