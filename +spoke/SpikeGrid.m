@@ -27,12 +27,12 @@ classdef SpikeGrid < most.Model
         
         %Spike waveform display properties
         horizontalRange = [-1 2] * 1e-3; %2 element vector ([pre post]) indicating times, in seconds, to display before and after threshold crossing
-        spikeAmpUnits = 'volts'; %One of {'volts' 'rmsMultiple'} indicating units to use for spike plot display. Value of 'rmsMultiple' only available if thresholdType='rmsMultiple'
+        waveformAmpUnits = 'volts'; %One of {'volts' 'rmsMultiple'} indicating units to use for waveform plot display. Value of 'rmsMultiple' only available if thresholdType='rmsMultiple'
         %verticalRange = [-4000 4000];
         
-        spikesPerPlot = 100; %Number of sweeps to display in each grid figure
-        spikesPerPlotClearMode = 'all'; %One of {'all' 'oldest'}
-        spikePlotClearPeriod = inf; % (TODO) Time, in seconds, after which to clear all or oldest spike if no spikes have been received
+        waveformsPerPlot = 100; %Number of waveforms to display (overlay) in each channel subplot before clearing
+        waveformsPerPlotClearMode = 'all'; %One of {'all' 'oldest'}. Specify waveform-clearing behavior when the waveformsPerPlot limit is reached.
+        waveformPlotClearPeriod = inf; % (TODO) Time, in seconds, after which to clear all or oldest waveform if no waveforms have been received
         
         %Raster/PSTH display properties
         stimStartChannel = []; %Channel number (zero-indexed) to use for signaling start of stim
@@ -54,7 +54,7 @@ classdef SpikeGrid < most.Model
         % The following are properties that were SetAccess=protected, but
         % have been moved out of protected to allow config file saves with
         % most.
-        refreshPeriodMaxSpikeRate = inf; %Maximum spike rate (Hz) to detect/plot at each refresh period; spikes above this rate are discarded
+        refreshPeriodMaxWaveformRate = inf; %Maximum waveform rate (Hz) to detect/plot for each refresh period; spikes/stimuli above this rate are discarded (in spike-/stim-triggered waveform modes, respectively)
         
         % The following are properties that back up dependent properties.
         % This is for properties that need to be saved to disk.
@@ -67,7 +67,7 @@ classdef SpikeGrid < most.Model
     
     properties (SetObservable, Dependent)
         verticalRange; %2 element vector ([min max]) indicating voltage bounds or RMSMultiple (depending on thresholdType) for each spike plot
-        refreshPeriodMaxNumSpikes = inf; %Maximum number of spikes to detect/plot during a given refresh period
+        refreshPeriodMaxNumWaveforms = inf; %Maximum number of spikes to detect/plot during a given refresh period
         numAuxChans; %Number of auxiliary
     end
     
@@ -198,7 +198,7 @@ classdef SpikeGrid < most.Model
     end
     
     properties (SetAccess=protected,Hidden,SetObservable,AbortSet)
-        maxNumSpikesApplied = false; %Logical indicating if the refreshPeriodMaxNumSpikes clamp was applied for any channel on the last refresh period
+        maxNumSpikesApplied = false; %Logical indicating if the refreshPeriodMaxNumWaveforms clamp was applied for any channel on the last refresh period
         
     end
     
@@ -510,15 +510,15 @@ classdef SpikeGrid < most.Model
             val = ceil(numNeuralChans/obj.PLOTS_PER_TAB);
         end
         
-        function val = get.refreshPeriodMaxNumSpikes(obj)
-            val = obj.refreshPeriodMaxSpikeRate / obj.refreshRate;
+        function val = get.refreshPeriodMaxNumWaveforms(obj)
+            val = obj.refreshPeriodMaxWaveformRate / obj.refreshRate;
         end
         
-        function set.refreshPeriodMaxSpikeRate(obj,val)
-            obj.validatePropArg('refreshPeriodMaxSpikeRate',val);
+        function set.refreshPeriodMaxWaveformRate(obj,val)
+            obj.validatePropArg('refreshPeriodMaxWaveformRate',val);
             
             lclVar = ceil(val / obj.refreshRate);
-            obj.refreshPeriodMaxSpikeRate = lclVar * obj.refreshRate;
+            obj.refreshPeriodMaxWaveformRate = lclVar * obj.refreshRate;
         end
         
         function val = get.refreshPeriodAvgScans(obj)
@@ -546,12 +546,12 @@ classdef SpikeGrid < most.Model
             refreshPeriodRounded = round(1e3 * 1/val) * 1e-3; %Make an integer number of milliseconds
             set(obj.hTimer,'Period',refreshPeriodRounded);
             
-            currMaxSpikeRate = obj.refreshPeriodMaxSpikeRate;
+            currMaxSpikeRate = obj.refreshPeriodMaxWaveformRate;
             
             obj.refreshRate = 1/get(obj.hTimer,'Period');
             
             %Side-effects
-            obj.refreshPeriodMaxSpikeRate = currMaxSpikeRate;
+            obj.refreshPeriodMaxWaveformRate = currMaxSpikeRate;
         end
         
         function val = get.horizontalRangeScans(obj)
@@ -588,15 +588,15 @@ classdef SpikeGrid < most.Model
             end
         end
         
-        function set.spikeAmpUnits(obj,val)
-            obj.validatePropArg('spikeAmpUnits',val);
+        function set.waveformAmpUnits(obj,val)
+            obj.validatePropArg('waveformAmpUnits',val);
             
             if strcmpi(obj.thresholdType,'volts')
                 val = 'volts'; %Value of 'rmsMultiple' only possible if thresholdType='rmsMultiple'
             end
             
-            oldVal = obj.spikeAmpUnits;
-            obj.spikeAmpUnits = val;
+            oldVal = obj.waveformAmpUnits;
+            obj.waveformAmpUnits = val;
             
             %Side-effects
             if ~strcmpi(oldVal,val)
@@ -623,7 +623,7 @@ classdef SpikeGrid < most.Model
         function set.verticalRange(obj,val)
             obj.validatePropArg('verticalRange',val);
             
-            if strcmpi(obj.spikeAmpUnits,'volts');
+            if strcmpi(obj.waveformAmpUnits,'volts');
                 aiRangeMax = obj.sglParamCache.niAiRangeMax;
                 if any(abs(val) > 1.1 * aiRangeMax)
                     warning('Specified range exceeded input channel voltage range by greater than 10% -- spike amplitude axis limits clamped');
@@ -663,10 +663,10 @@ classdef SpikeGrid < most.Model
         function val = get.maxPointsPerAnimatedLine(obj)
             %Calculate MaximumNumPoints
             
-            if strcmp(obj.spikesPerPlotClearMode,'oldest')
+            if strcmp(obj.waveformsPerPlotClearMode,'oldest')
                 spikeSampleRate = obj.sglParamCache.niSampRate;
                 numPointsPerWindow = spikeSampleRate * (obj.horizontalRange(2)-obj.horizontalRange(1));
-                val = ceil(obj.spikesPerPlot * numPointsPerWindow);
+                val = ceil(obj.waveformsPerPlot * numPointsPerWindow);
             else
                 val = Inf;
             end
@@ -676,16 +676,16 @@ classdef SpikeGrid < most.Model
         %              val = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
         %         end
         
-        function set.spikesPerPlot(obj,val)
-            obj.validatePropArg('spikesPerPlot',val);
-            obj.spikesPerPlot = val;
+        function set.waveformsPerPlot(obj,val)
+            obj.validatePropArg('waveformsPerPlot',val);
+            obj.waveformsPerPlot = val;
         end
         
-        function set.spikesPerPlotClearMode(obj,val)
-            obj.zprpAssertNotRunning('spikesPerPlotClearMode');
-            obj.validatePropArg('spikesPerPlotClearMode',val);
+        function set.waveformsPerPlotClearMode(obj,val)
+            obj.zprpAssertNotRunning('waveformsPerPlotClearMode');
+            obj.validatePropArg('waveformsPerPlotClearMode',val);
             
-            obj.spikesPerPlotClearMode = val;
+            obj.waveformsPerPlotClearMode = val;
             
             %side-effects
             %TODO: add check here to reset max points in animatedline when changed to anything but 'oldest'.
@@ -2067,7 +2067,7 @@ classdef SpikeGrid < most.Model
                 end
                 
                 %Redraw threshold lines, if it can change (only in case of 'mismatched' threshold type and display units)
-                if strcmpi(obj.thresholdType,'rmsMultiple') && strcmpi(obj.spikeAmpUnits,'volts')
+                if strcmpi(obj.thresholdType,'rmsMultiple') && strcmpi(obj.waveformAmpUnits,'volts')
                     obj.zprvDrawThresholdLines();
                 end
                 
@@ -2097,11 +2097,11 @@ classdef SpikeGrid < most.Model
                     threshMean = obj.baselineMean;
                 end
                 
-                [newSpikeScanNums, obj.maxNumSpikesApplied] = zlclDetectSpikes(obj.reducedData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,threshMean,obj.refreshPeriodMaxNumSpikes,obj.sglChanSubset,obj.neuralChanAcqList); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+                [newSpikeScanNums, obj.maxNumSpikesApplied] = zlclDetectSpikes(obj.reducedData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,threshMean,obj.refreshPeriodMaxNumWaveforms,obj.sglChanSubset,obj.neuralChanAcqList); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
                 
                 %
                 %             if maxNumSpikesApplied && ~obj.maxNumSpikesApplied
-                %               fprintf(2,'WARNING: Exceeded maximum number of spikes (%d) on one or more channels; subsequent spikes were ignored.\n', obj.refreshPeriodMaxNumSpikes);
+                %               fprintf(2,'WARNING: Exceeded maximum number of spikes (%d) on one or more channels; subsequent spikes were ignored.\n', obj.refreshPeriodMaxNumWaveforms);
                 %             end
                 %
                 %             obj.maxNumSpikesApplied = maxNumSpikesApplied;
@@ -2109,7 +2109,7 @@ classdef SpikeGrid < most.Model
             else
                 threshVal = obj.thresholdVal / obj.voltsPerBitNeural; %Convert to AD units
                 threshMean = 0; %Don't do mean subtraction
-                newSpikeScanNums = zlclDetectSpikes(obj.reducedData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,0,obj.refreshPeriodMaxNumSpikes,obj.sglChanSubset,obj.neuralChanAcqList); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+                newSpikeScanNums = zlclDetectSpikes(obj.reducedData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,0,obj.refreshPeriodMaxNumWaveforms,obj.sglChanSubset,obj.neuralChanAcqList); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
             end
             
         end
@@ -2300,12 +2300,12 @@ classdef SpikeGrid < most.Model
                 xData = linspace(obj.horizontalRange(1),obj.horizontalRange(2),horizontalRangeScansLength)';
                 
                 newSpikeCounts = obj.lastPlottedWaveformCount(i) + (1:numNewSpikes);
-                lineIdxs = mod(newSpikeCounts,obj.spikesPerPlot) + 1; %The line object indices to use for these newly detected spikes
+                lineIdxs = mod(newSpikeCounts,obj.waveformsPerPlot) + 1; %The line object indices to use for these newly detected spikes
                 
                 % Clear spikes (if necessary)
-                switch obj.spikesPerPlotClearMode
+                switch obj.waveformsPerPlotClearMode
                     case 'all'
-                        if obj.lastPlottedWaveformCountSinceClear(i) + numNewSpikes > obj.spikesPerPlot
+                        if obj.lastPlottedWaveformCountSinceClear(i) + numNewSpikes > obj.waveformsPerPlot
                             obj.hSpikeLines(plotIdx).clearpoints();
                             obj.lastPlottedWaveformCountSinceClear(i) = 0;
                         end
@@ -2337,7 +2337,7 @@ classdef SpikeGrid < most.Model
                 assert(length(waveform) == length(xData),'Waveform data for chan %d (%d), spike %d not of expected length (%d)\n',i,length(waveform),j,length(xData));
                 
                 %Scale waveform from A/D units to target units, applying mean subtraction if thresholdType='rmsMultiple'
-                switch obj.spikeAmpUnits
+                switch obj.waveformAmpUnits
                     case 'volts'
                         if strcmpi(obj.thresholdType,'volts') %no mean subtraction...just show as is
                             waveform = double(waveform) * obj.voltsPerBitNeural;
@@ -2381,7 +2381,7 @@ classdef SpikeGrid < most.Model
         %     function zprvResetThreshold(obj)
         %
         %       %TODO(?): A smarter adjustment based on the last-cached RMS values, somehow handlign the variety across channels
-        %         switch obj.spikeAmpUnits
+        %         switch obj.waveformAmpUnits
         %           case 'volts'
         %               obj.thresholdVal = .1 * obj.hSpoke.x_fs;
         %           case 'rmsMultiple'
@@ -2407,7 +2407,7 @@ classdef SpikeGrid < most.Model
             delete(handlesToClear);
             
             %Compute all-channel threshold; determine lack of threshold val -- as applicable
-            perChanThreshold = ~strcmpi(obj.thresholdType,obj.spikeAmpUnits);
+            perChanThreshold = ~strcmpi(obj.thresholdType,obj.waveformAmpUnits);
             if perChanThreshold %RMS threshold with voltage units -- this is only mismatch type presently allowed
                 if isempty(obj.baselineRMS)
                     obj.hThresholdLines = repmat({ones(numNeuralChans,1) * -1},2,1);
@@ -2834,11 +2834,11 @@ s.horizontalRange = struct('Attributes',{{'numel' 2 'finite'}});
 %s.verticalRange = struct('Attributes',{{'finite' '1d'}});
 s.verticalRange = struct('Attributes',{{'numel' 2 'finite'}});
 
-s.spikeAmpUnits = struct('Options',{{'volts' 'rmsMultiple'}});
+s.waveformAmpUnits = struct('Options',{{'volts' 'rmsMultiple'}});
 
 
-s.spikesPerPlot = struct('Attributes',{{'scalar' 'finite' 'positive'}});
-s.spikesPerPlotClearMode = struct('Options',{{'all' 'oldest'}});
+s.waveformsPerPlot = struct('Attributes',{{'scalar' 'finite' 'positive'}});
+s.waveformsPerPlotClearMode = struct('Options',{{'all' 'oldest'}});
 s.spikeRefractoryPeriod = struct('Attributes',{{'scalar' 'finite' 'nonnegative'}});
 
 s.dataReadMode = struct('Options',{{'file' 'spikeGL'}});
@@ -2854,7 +2854,7 @@ s.verticalRangeRasterInfIncrement = struct('Attributes',{{'positive' 'scalar' 'f
 s.stimEventClassifyFcn = struct();
 
 s.refreshRate = struct('Attributes',{{'finite' 'positive' 'scalar'}});
-s.refreshPeriodMaxSpikeRate = struct('Attributes',{{'scalar' 'positive'}});
+s.refreshPeriodMaxWaveformRate = struct('Attributes',{{'scalar' 'positive'}});
 
 s.psthTimeBin = struct('Attributes',{{'nonnegative' 'scalar' 'finite'}});
 s.psthAmpRange = struct('Attributes',{{'nonnegative' 'finite' 'numel' 2}});
