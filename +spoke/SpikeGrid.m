@@ -2333,7 +2333,7 @@ classdef SpikeGrid < most.Model
                 end
             end
             
-            %Clear oldest partial waveform stored, now that it's plotted
+            %Clear oldest partial waveforms stored, now that they're plotted
             if ~isempty(obj.waveformWrap)
                 obj.waveformWrap(1) = [];
                 obj.partialWaveformBuffer(1,:) = [];
