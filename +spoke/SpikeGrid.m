@@ -1467,11 +1467,11 @@ classdef SpikeGrid < most.Model
                 
                 t3 = toc(t0);
                 
-                %STAGE 4: Detect stimulus or spike(s) within data buffer
+                %STAGE 4: Detect stimulus and/or spike(s) within data buffer
                 newSpikeScanNums = cell(numNeuralChans,1);
                 
-                %STAGE 4 - BRANCH 1: Detect spike(s) within data buffer
-                %  (modes: spike-triggered waveform & raster)
+                %STAGE 4a: Detect spike(s) within data buffer
+                %  (Modes: Spike-triggered Waveform & Raster)
                 %  Excludes spikes during:
                 %   * 'refractory period'(discarded)
                 %   * final 'post-trigger' time, as spec'd by horizontalRange  (processed during next timer period)
@@ -1491,22 +1491,25 @@ classdef SpikeGrid < most.Model
                     end
                 end
                 
-                %STAGE 4 - BRANCH 2: Detect stimulus within data buffer
-                % (mode: stimulus-triggered waveform)
+                %STAGE 4b: Detect stimulus within data buffer
+                % (modes: Stimulus-triggered Waveform & Raster)
                 % Currently only detects up to one stimulus per data period
                 if stimulusTriggeredWaveformMode
                     obj.stimScanNums=[];
                     znstDetectStimulus(bufStartScanNum);
-                end % if ~stimulusTriggeredWaveformMode
+                elseif rasterDisplayMode
+                    znstDetectStimulus(bufStartScanNum);
+                end                
                 
                 t4 = toc(t0);
                 
-                %STAGE 5: Store reduced data (waveform snippets, timestamps) from current batch of raw processed data, as needed for subsequent plotting stages and subsequent timer periods
+                %STAGE 5: Data reduction of curent raw data batch, storing only needed features (waveform snippets, timestamps, spike-stimulus associations) for subsequent stages & timer periods
+                                
+                %STAGE 5a: (Waveform modes only) Determine and store timestamps & waveform snippets                
                 % Raster & Spike-triggered Waveform modes: store detected spike scan numbers
                 % Stimulus-triggered Waveform mode: store detected stimulus scan numbers
                 % Waveform modes: store waveform snippets
                 % also: initialize stimulus spike-tagging storage for Raster mode (TODO:  Review if STAGE 6 could be combined with STAGE 4, updating this step accordingly)
-                
                 if ~stimulusTriggeredWaveformMode
                     timestampOffsets = newSpikeScanNums;
                 else
@@ -1514,20 +1517,17 @@ classdef SpikeGrid < most.Model
                 end
                 
                 znstStoreReducedData(timestampOffsets,bufStartScanNum);
-                t5 = toc(t0);
-                
-                %STAGE 6: (Raster mode only) Detect stimulus. Classify its event type. Update reduced data structures with stimuli info. 
-                % TODO: Review if the detect stimulus step could be moved to STAGE 4 (e.g. as STAGE 4b). Then this stage might become STAGE 5b. 
+                                
+                %STAGE 5b: (Raster mode only) Determine & store spike-stimulus associations, and stimulus classifications if applicable 
                 if rasterDisplayMode
-                    znstDetectStimulus(bufStartScanNum);
                     if ~isempty(obj.stimScanNums)
                         znstClassifyStimulus(bufStartScanNum); %Classify stimulus event type, if possible
                     end
                     chanNewSpikes = znstAssociateSpikesToStimuli(); %Tag spike data with stimulus/event info, as needed/possible
                 end
-                t6 = toc(t0);
-                
-                %STAGE 7: Plot newly detected spike(s) that were stored for display - will always be enough post data, and generally enough pre-data except for spikes at very beginning
+                t5 = toc(t0);
+                                                
+                %STAGE 6: Plot newly detected spike(s) that were stored for display - will always be enough post data, and generally enough pre-data except for spikes at very beginning
                 if rasterDisplayMode
                     obj.zprvUpdateRasterPlot(chanNewSpikes);
                 elseif stimulusTriggeredWaveformMode
@@ -1535,19 +1535,19 @@ classdef SpikeGrid < most.Model
                 else
                     obj.zprvUpdateWaveformPlot();
                 end
-                t7 = toc(t0);
+                t6 = toc(t0);
                 
                 %TODO: Review if this belongs in STAGE 5
                 if ~isempty(newWaveformWrapVal)
                     obj.waveformWrap(end+1) = newWaveformWrapVal;
                 end
                 
-                %STAGE 8: Update current baseline stats values (mean & RMS), if needed
+                %STAGE 7: Update current baseline stats values (mean & RMS), if needed
                 if (rmsMultipleThresh || obj.filterWindow(1) == 0) && ...
                         (obj.bufScanNumEnd - obj.baselineRMSLastScan) > obj.baselineStatsRefreshPeriodScans % enough time has elapsed since last RMS sampling
                     znstUpdateBaselineStats(newSpikeScanNums,bufStartScanNum);
                 end
-                t8 = toc(t0);
+                t7 = toc(t0);
                 
                 %Housekeeping: reset the rawDataBuffer
                 %TODO: Review moving this to rawDataBuffer formation step above in STAGE 3
@@ -1563,13 +1563,13 @@ classdef SpikeGrid < most.Model
                     fprintf(2,'Error contracting the data buffer, which has size: %s\n',mat2str(size(obj.rawDataBuffer)));
                     ME.rethrow();
                 end
-                t9 = toc(t0);
+                t8 = toc(t0);
                 
                 %fprintf('Total Time (%d scans of %d channels): %g\tRead: %g\tMeanSubtract: %g\tFilter: %g\tDetect: %g\tStore: %g\tStimTag: %g\tPlot: %g \t Mean Compute: %g\tContraction: %g\n',scansToRead,size(newData,2),t8*1000,t1*1000,(t2-t1)*1000,(t3-t2)*1000,(t4-t3)*1000,(t5-t4)*1000,(t6-t5)*1000,(t7-t6)*1000,(t8-t7)*1000,(t9-t8)*1000);
                 readTime = 1000 * t1;
-                procTimePre = 1000 * (t6-t1);
-                plotTime = 1000 * (t7-t6);
-                procTimePost = 1000 * (t9-t7);
+                procTimePre = 1000 * (t5-t1);
+                plotTime = 1000 * (t6-t5);
+                procTimePost = 1000 * (t8-t6);
                 
                 n = obj.bmarkReadTimeStats(3);
                 mu = (obj.bmarkReadTimeStats(1) * n + readTime) / (n+1);
