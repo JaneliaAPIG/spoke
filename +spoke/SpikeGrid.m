@@ -747,7 +747,7 @@ classdef SpikeGrid < most.Model
             if ~isequal(oldVal,val) && strcmpi(obj.displayMode,'raster')
                 obj.zprvClearPlots('raster');
                 if obj.running
-                    obj.zprvRefreshRasterGrid();
+                    obj.zprvUpdateRasterPlot();
                 end
             end
             
@@ -884,7 +884,7 @@ classdef SpikeGrid < most.Model
                 
                 %Update threshold lines/raster plots, as appropriate
                 if strcmpi(obj.displayMode,'raster')
-                    obj.zprvRefreshRasterGrid();
+                    obj.zprvUpdateRasterPlot();
                 end
                 
                 drawnow expose update;
@@ -1266,7 +1266,7 @@ classdef SpikeGrid < most.Model
             
             try
                 obj.zprvClearPlots('raster');
-                obj.zprvRefreshRasterGrid();
+                obj.zprvUpdateRasterPlot();
             catch ME_
                 ME = ME_;
             end
