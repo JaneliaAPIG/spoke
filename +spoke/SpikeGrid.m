@@ -198,7 +198,7 @@ classdef SpikeGrid < most.Model
     end
     
     properties (SetAccess=protected,Hidden,SetObservable,AbortSet)
-        maxNumSpikesApplied = false; %Logical indicating if the refreshPeriodMaxNumWaveforms clamp was applied for any channel on the last refresh period
+        maxNumWaveformsApplied = false; %Logical indicating if the refreshPeriodMaxNumWaveforms clamp was applied for any channel on the last refresh period
         
     end
     
@@ -1111,7 +1111,7 @@ classdef SpikeGrid < most.Model
             obj.running = false;
             
             %Reset to initial conditions
-            obj.maxNumSpikesApplied = false;
+            obj.maxNumWaveformsApplied = false;
         end
         
         function loadConfig(obj,filename)
@@ -2097,14 +2097,14 @@ classdef SpikeGrid < most.Model
                     threshMean = obj.baselineMean;
                 end
                 
-                [newSpikeScanNums, obj.maxNumSpikesApplied] = zlclDetectSpikes(obj.reducedData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,threshMean,obj.refreshPeriodMaxNumWaveforms,obj.sglChanSubset,obj.neuralChanAcqList); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+                [newSpikeScanNums, obj.maxNumWaveformsApplied] = zlclDetectSpikes(obj.reducedData,obj.rawDataBuffer,bufStartScanNum,round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate),threshVal,obj.thresholdAbsolute,threshMean,obj.refreshPeriodMaxNumWaveforms,obj.sglChanSubset,obj.neuralChanAcqList); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
                 
                 %
-                %             if maxNumSpikesApplied && ~obj.maxNumSpikesApplied
+                %             if maxNumWaveformsApplied && ~obj.maxNumWaveformsApplied
                 %               fprintf(2,'WARNING: Exceeded maximum number of spikes (%d) on one or more channels; subsequent spikes were ignored.\n', obj.refreshPeriodMaxNumWaveforms);
                 %             end
                 %
-                %             obj.maxNumSpikesApplied = maxNumSpikesApplied;
+                %             obj.maxNumWaveformsApplied = maxNumWaveformsApplied;
                 
             else
                 threshVal = obj.thresholdVal / obj.voltsPerBitNeural; %Convert to AD units
@@ -2728,7 +2728,7 @@ end
 
 
 %% LOCAL FUNCTIONS
-function [newSpikeScanNums, maxNumSpikesApplied] = zlclDetectSpikes(reducedData,rawDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,baselineMean,maxNumSpikes,sglChanSubset,chanSubset)
+function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedData,rawDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,baselineMean,maxNumSpikes,sglChanSubset,chanSubset)
 %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
 %
 % reducedData: Cell array, one element per channel, containing data for each detected spike (from earlier timer callback period(s))
@@ -2742,7 +2742,7 @@ function [newSpikeScanNums, maxNumSpikesApplied] = zlclDetectSpikes(reducedData,
 %
 % NOTES:
 %  VI050812: Not clear that recentSpikeScanNums can ever be non-empty -- might be able to get rid of this logic (and reducedData argument) altogether?
-maxNumSpikesApplied = false;
+maxNumWaveformsApplied = false;
 numNeuralChans = length(reducedData);
 newSpikeScanNums = cell(numNeuralChans,1);
 
@@ -2793,7 +2793,7 @@ for h=1:numel(chanSubset)
         else
             spikesFound = spikesFound + 1;
             if spikesFound > maxNumSpikes
-                maxNumSpikesApplied = true;
+                maxNumWaveformsApplied = true;
                 break;
             end
         end
