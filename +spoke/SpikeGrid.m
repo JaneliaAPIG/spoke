@@ -179,7 +179,8 @@ classdef SpikeGrid < most.Model
         bmarkPlotTimeStats = zeros(3,1);; %Array of [mean std n]
         bmarkPostProcessTimeStats = zeros(3,1);; %Array of [mean std n]
         
-        waveformWrap = []; %stimulus or spike detected at end of timer processing period - waveform must be completed by this number of samples in the next processing period
+        %waveformWrap/partialWaveformBuffer props handle edge-cases in stim-triggered waveform mode. they could potentially be used for spike-triggered waveform mode.
+        waveformWrap = []; %waveform detected towards end of timer processing period; specifies number of samples in the next processing period needed to complete the waveform
         partialWaveformBuffer = {}; % Buffer that holds part of a waveform from prior processing period. Used when waveformWrap is true.
     end
     
@@ -189,8 +190,7 @@ classdef SpikeGrid < most.Model
         %Number of logical chans of each of the sub-types available, as configured via the SpikeGLX NI Configuration
         neuralChansAvailable;
         analogMuxChansAvailable;
-        analogSoloChansAvailable;
-        
+        analogSoloChansAvailable;        
     end
     
     properties (SetAccess=protected,Hidden,SetObservable,AbortSet)
@@ -214,9 +214,7 @@ classdef SpikeGrid < most.Model
         psthFigPosition; %Figure position of PSTH grid figure
         
         maxPointsPerAnimatedLine; %Used to set the number of max points per animated line.
-        
-        
-        
+                        
         %neuralChanAcqList; %Used to get the number of neural channels (used instead of sglChanSubset, which returns all channels, not just MN chans)
     end
     
@@ -1723,9 +1721,20 @@ classdef SpikeGrid < most.Model
                                     obj.partialWaveformBuffer{end,i} = obj.rawDataBuffer(idxWindowMin(1):end,h);
                                 end
                             else
-                                %TODO: Handle waveformWrap for spike-triggered case
+                                %Warn if a 'late' waveform arises in spike-triggered waveform mode                                                                
                                 fprintf('waveform #%d out of bounds, channel #%d, idxWindow min(1): %d, idxWindow min(end): %d, idxWindow max(1): %d, idxWindow max(end): %d\n', ...
                                     j, i, idxWindowMin(1), idxWindowMin(end), idxWindowMax(1), idxWindowMin(end) );
+                                
+                                %TODO:Determine if this can actually
+                                %happen; if the
+                                %partialWaveformBuffer/waveformWrap
+                                %mechanism is needed/useful in
+                                %spike-triggered waveform mode; and/or if
+                                %the contract/augment buffer mechanism
+                                %supercedes or is superceded by the
+                                %partialWaveformBuffer/waveformWrap
+                                %potential mechanism
+                                
                             end
                         else
                             obj.reducedData{i}.waveforms{j} = obj.rawDataBuffer(idxWindow,h);
@@ -2316,13 +2325,15 @@ classdef SpikeGrid < most.Model
                 % Draw new spikes
                 if ~isempty(obj.waveformWrap)
                     j=0; % used only to pass assert in nested function below. J=0 in this case because we are referring to a previous waveform (as a product of a previously detected stimulus or spike)
-                    znstPlotWaveform(obj.partialWaveformBuffer{1,i});
+                    znstPlotWaveform(obj.partialWaveformBuffer{1,i}); %plot oldest partial waveform stored
                 else
                     for j=1:numNewWaveforms
                         znstPlotWaveform(obj.reducedData{i}.waveforms{j});
                     end
                 end
             end
+            
+            %Clear oldest partial waveform stored, now that it's plotted
             if ~isempty(obj.waveformWrap)
                 obj.waveformWrap(1) = [];
                 obj.partialWaveformBuffer(1,:) = [];
