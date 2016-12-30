@@ -139,7 +139,6 @@ classdef SpikeGrid < most.Model
         baselineRMSLastScan = 0; %Last scan number at which threshold RMS value was updated
         
         reducedData = {}; %Cell array, one cell per available neural channel, of structures storing reduced data from the raw data (timestamps, waveform snippets, stimulus-tagged timestamps), based on detected stimuli and/or spike(s)
-        spikeCount = []; %Scalar array specifying number of spikes detected per channel since start()
         lastPlottedSpikeCount = []; %Scalar array specifying the spike count, for each channel that's been last plotted
         lastPlottedSpikeCountSinceClear = []; %Scalar array specificying the spike count, for each channel that's been last plotted (cleared every time a channel is cleared) - only used for 'all' plot clear mode.
         %globalMean; %Global mean value across acquisition channels, computed from all non-spike-window scan from within last baselineRMSTime, if globalMeanSubtraction=true is nonempty
@@ -1662,11 +1661,7 @@ classdef SpikeGrid < most.Model
                         else
                             timestampOffsets_ = timestampOffsets{i};
                         end
-                        numNewTimestamps = length(timestampOffsets_);
-                        
-                        
-                        %Update spike counts
-                        obj.spikeCount(i) = obj.spikeCount(i) + numNewTimestamps; %TODO: rename spikeCount to generalize for stim-triggered waveform mode; OR explicitly don't update this var in that mode
+                        numNewTimestamps = length(timestampOffsets_);                                                
                         
                         %In waveform display modes - clear all previous channel data
                         if waveformDisplay
@@ -2493,7 +2488,6 @@ classdef SpikeGrid < most.Model
             
             numNeuralChans = numel(obj.neuralChansAvailable);
             
-            obj.spikeCount = zeros(numNeuralChans,1);
             obj.lastPlottedSpikeCount = zeros(numNeuralChans,1);
             obj.lastPlottedSpikeCountSinceClear = zeros(numNeuralChans,1);
             
