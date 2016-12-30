@@ -148,10 +148,6 @@ classdef SpikeGrid < most.Model
         
         bufScanNumEnd; %Scan number of the last element in the rawDataBuffer
         rawDataBuffer; %Array to cache raw channel data to process during each timer cycle. Grows & contracts each cycle.
-        overflowBuffer; %Array to cache raw channel data from previous timer cycle. This is used for the stimulus detection case where a stimulus
-        %detection window lies outside of the range of the
-        %rawDataBuffer.
-        
         
         voltsPerBitAux; %Scaling factor between A/D values and voltage for Auxiliary Channels
         voltsPerBitNeural; %Scaling factor between A/D values and voltage for Neural Channels
@@ -1648,7 +1644,9 @@ classdef SpikeGrid < most.Model
                 end
                 
                 try
+                   
                     scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
+                    
                     
                     for h=1:numel(obj.neuralChanAcqList)
                         i = obj.sglChanSubset(h)+1;
