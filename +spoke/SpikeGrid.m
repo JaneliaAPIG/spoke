@@ -1517,15 +1517,14 @@ classdef SpikeGrid < most.Model
                 znstStoreReducedData(timestampOffsets,bufStartScanNum);
                 t5 = toc(t0);
                 
-                %STAGE 6: (Raster mode only) Detect stimulus & update reduced data
-                % TODO: Review if this could be moved to STAGE 4 (as STAGE 4b)
-                %Detect, record, classify stimulus start, as needed
+                %STAGE 6: (Raster mode only) Detect stimulus. Classify its event type. Update reduced data structures with stimuli info. 
+                % TODO: Review if the detect stimulus step could be moved to STAGE 4 (e.g. as STAGE 4b). Then this stage might become STAGE 5b. 
                 if rasterDisplayMode
                     znstDetectStimulus(bufStartScanNum);
                     if ~isempty(obj.stimScanNums)
                         znstClassifyStimulus(bufStartScanNum); %Classify stimulus event type, if possible
                     end
-                    chanNewSpikes = znstTagSpikes(); %Tag spike data with stimulus/event info, as needed/possible
+                    chanNewSpikes = znstAssociateSpikesToStimuli(); %Tag spike data with stimulus/event info, as needed/possible
                 end
                 t6 = toc(t0);
                 
@@ -1918,12 +1917,12 @@ classdef SpikeGrid < most.Model
                 
             end
             
-            function chanNewSpikes = znstTagSpikes()
-                %Tag stimulus-associated spikes that have been previously detected
-                %and stored. Spikes not associated with stimulus are cleared. If
-                %event-types are specified, spikes are tagged with name of
-                %associated stimulus event type.
-                
+            function chanNewSpikes = znstAssociateSpikesToStimuli()
+                %For Raster mode, associate spikes to stimuli (and stimulus
+                %event-types, if applicable). Update reduced data structure
+                %with these associations. Return (just) the newly
+                %associated spikes, to allow for a fast plot update.
+                                
                 for i=1:length(obj.stimEventTypes_)
                     chanNewSpikes.(obj.stimEventTypes_{i}) = zeros(numNeuralChans,1);
                 end
