@@ -1320,8 +1320,7 @@ classdef SpikeGrid < most.Model
             
             try
                 
-                newWaveformWrapVal = [];
-                
+                newWaveformWrapVal = [];                
 
                 t0 = tic;
                 
@@ -1455,8 +1454,14 @@ classdef SpikeGrid < most.Model
                 t3 = toc(t0);
                 				
 				%Detect spike(s) within data buffer, except for final spike-window 'post' time
-				if size(obj.rawDataBuffer,1) < (obj.horizontalRangeScans(2) + 2)
-					return;
+               
+                %Not sure what this check is about. Let's warn instead of
+                %returning preemptively (which causes a guaranteed error!)               
+                if size(obj.rawDataBuffer,1) < (obj.horizontalRangeScans(2) + 2)
+					%return;                
+                    if ~rasterDisplayMode
+                       warning('Size rawDataBuffer is small relative to horizontalRange. This is suspected to potentially cause an issue/error.\n');
+                    end
                 end
                 
                 newSpikeScanNums = cell(numNeuralChans,1);
@@ -1527,7 +1532,10 @@ classdef SpikeGrid < most.Model
                 try
                     if rasterDisplayMode
                         %Raster mode: leave all but the number of scans required to classify
+                        %dfprintf('Contracting rawDataBuffer from size %s',mat2str(size(obj.rawDataBuffer)));
                         obj.rawDataBuffer(1:end-max(1,obj.stimEventClassifyNumScans)+1,:) = [];
+                        %dfprintf('to size %s\n',mat2str(size(obj.rawDataBuffer)));
+
                     else
                         %Waveform mode: leave only one full horizontalRange (pre+post+1 sample) at the end
                         obj.rawDataBuffer(1:end-(diff(obj.horizontalRangeScans)+1),:) = [];
@@ -1589,6 +1597,8 @@ classdef SpikeGrid < most.Model
             function bufStartScanNum = znstAugmentRawDataBuffer(scansToRead, newData)
                 %dfprintf('augmentRawDataBuffer! scansToRead: %d\n', scansToRead);
                 %dfprintf('newdata size: %d\n', size(newData,1));
+                %dfprintf('sz rawDataBuffer: %s   horizontalRangeScans: %s\n', mat2str(size(obj.rawDataBuffer)),mat2str(obj.horizontalRangeScans));
+                
                 assert(ismember(size(obj.rawDataBuffer,1),[0 diff(obj.horizontalRangeScans)+1 obj.stimEventClassifyNumScans - 1]),'Expected rawDataBuffer to be empty or exactly equal to size of spike window');
 
                 %         if obj.bufScanNumEnd == 0
