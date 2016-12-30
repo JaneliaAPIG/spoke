@@ -1646,7 +1646,6 @@ classdef SpikeGrid < most.Model
                 try
                    
                     scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
-                    newLength = [];
                     
                     for h=1:numel(obj.neuralChanAcqList)
                         i = obj.sglChanSubset(h)+1;
@@ -1718,10 +1717,11 @@ classdef SpikeGrid < most.Model
                         elseif (idxWindowMax(end) > size(obj.rawDataBuffer,1)) %'late' waveform at end of a timer chunk, extending beyond available data
                             if stimulusTriggeredWaveformMode
                                 if h==1
-                                    newLength = size(obj.partialWaveformBuffer,1) + 1;
+                                    obj.partialWaveformBuffer{end+1,i} = obj.rawDataBuffer(idxWindowMin(1):end,h);
                                     newWaveformWrapVal = idxWindowMax(end) - size(obj.rawDataBuffer,1); %TODO CHECK FOR +1 NECESSARY?
+                                else
+                                    obj.partialWaveformBuffer{end,i} = obj.rawDataBuffer(idxWindowMin(1):end,h);
                                 end
-                                obj.partialWaveformBuffer{newLength,i} = obj.rawDataBuffer(idxWindowMin(1):end,h);
                             else
                                 %TODO: Handle waveformWrap for spike-triggered case
                                 fprintf('waveform #%d out of bounds, channel #%d, idxWindow min(1): %d, idxWindow min(end): %d, idxWindow max(1): %d, idxWindow max(end): %d\n', ...
