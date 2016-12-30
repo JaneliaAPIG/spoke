@@ -1530,11 +1530,11 @@ classdef SpikeGrid < most.Model
                 
                 %STAGE 7: Plot newly detected spike(s) that were stored for display - will always be enough post data, and generally enough pre-data except for spikes at very beginning
                 if rasterDisplayMode
-                    obj.zprvRefreshRasterGrid(chanNewSpikes);
+                    obj.zprvUpdateRasterPlot(chanNewSpikes);
                 elseif stimulusTriggeredWaveformMode
-                    obj.zprvPlotNewSpikes();
+                    obj.zprvUpdateWaveformPlot();
                 else
-                    obj.zprvPlotNewSpikes();
+                    obj.zprvUpdateWaveformPlot();
                 end
                 t7 = toc(t0);
                 
@@ -2119,7 +2119,7 @@ classdef SpikeGrid < most.Model
             
         end
         
-        function zprvRefreshRasterGrid(obj,chanNewSpikes)
+        function zprvUpdateRasterPlot(obj,chanNewSpikes)
             sampPeriod = 1 / obj.sglParamCache.niSampRate;
             colorOrder = get(0,'DefaultAxesColorOrder');
             
@@ -2286,7 +2286,7 @@ classdef SpikeGrid < most.Model
             
         end
         
-        function zprvPlotNewSpikes(obj)
+        function zprvUpdateWaveformPlot(obj)
             
             totalNewSpikes = 0;
             
