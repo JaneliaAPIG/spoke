@@ -1009,7 +1009,7 @@ classdef SpikeGrid < most.Model
             obj.zprvResetAcquisition();
             
             %Clear previous lines
-            handlesToClear = [];                                               
+            handlesToClear = [];
             switch obj.displayMode
                 case 'waveform'
                     obj.zprvClearPlots('waveform');
@@ -1024,8 +1024,8 @@ classdef SpikeGrid < most.Model
                     obj.zprvClearPlots({'raster' 'psth'});
             end
             
-            %Show display fig 
-            obj.zprvShowDisplayFig();            
+            %Show display fig
+            obj.zprvShowDisplayFig();
             
             %Display-type specific initialization
             switch obj.displayMode
@@ -1471,7 +1471,7 @@ classdef SpikeGrid < most.Model
                 %   * 'refractory period'(discarded)
                 %   * final 'post-trigger' time, as spec'd by horizontalRange  (processed during next timer period)
                 
-                if ~stimulusTriggeredWaveformMode                                        
+                if ~stimulusTriggeredWaveformMode
                     if rmsMultipleInitializing %Handle case where no RMS data has been computed yet
                         %obj.rawDataBuffer((obj.refreshPeriodAvgScans+1):end,:) = []; %VVV062812: Is this needed/wanted?
                         
@@ -1701,7 +1701,7 @@ classdef SpikeGrid < most.Model
                 function znstStoreReducedData_Waveforms()
                     idxWindowMin = scanWindowRelative + timestampOffsets_(1) - bufStartScanNum;
                     idxWindowMax = scanWindowRelative + timestampOffsets_(numNewTimestamps) - bufStartScanNum;
-
+                    
                     for j=1:numNewTimestamps
                         if stimulusTriggeredWaveformMode
                             scanWindow = scanWindowRelative + timestampOffsets_;
@@ -1917,7 +1917,7 @@ classdef SpikeGrid < most.Model
                 %and stored. Spikes not associated with stimulus are cleared. If
                 %event-types are specified, spikes are tagged with name of
                 %associated stimulus event type.
-               
+                
                 for i=1:length(obj.stimEventTypes_)
                     chanNewSpikes.(obj.stimEventTypes_{i}) = zeros(numNeuralChans,1);
                 end
@@ -1934,12 +1934,12 @@ classdef SpikeGrid < most.Model
                     taggedNewSpike = false;
                     spikesToClear = [];
                     taggedSpikeIdxsStruct = taggedSpikeIdxStructInit;
-%                    fprintf('b: %d    ',b);
+                    %                    fprintf('b: %d    ',b);
                     %Loop through spikes from most recent backwards, tagging event-type if possible
-
-%                    fprintf('length of spikedata: %d\n',length(obj.spikeData{c}.scanNums));
+                    
+                    %                    fprintf('length of spikedata: %d\n',length(obj.spikeData{c}.scanNums));
                     for spikeIdx = length(obj.reducedData{c}.scanNums):-1:1
-%                        fprintf('hello!!!! %d\n',spikeIdx);
+                        %                        fprintf('hello!!!! %d\n',spikeIdx);
                         tmp1 =tic;
                         
                         %Reached previously-tagged spikes -- stop loop
@@ -1953,7 +1953,7 @@ classdef SpikeGrid < most.Model
                         %Find associated stim spike
                         spikeScanNum = obj.reducedData{c}.scanNums(spikeIdx);
                         
-                       % fprintf('spikeScanNum: %d\n',spikeScanNum);
+                        % fprintf('spikeScanNum: %d\n',spikeScanNum);
                         
                         stimIdx = find(spikeScanNum >= obj.stimWindowStartScanNums,1,'last');
                         
@@ -2079,7 +2079,7 @@ classdef SpikeGrid < most.Model
             end
             
         end
-
+        
         function newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum)
             
             if strcmpi(obj.thresholdType,'rmsMultiple')
@@ -2153,7 +2153,7 @@ classdef SpikeGrid < most.Model
             for c=obj.tabChanNumbers
                 plotCount = plotCount + 1;
                 
-
+                
                 %if isempty(obj.reducedData{j}) || chanNewSpikes(j) == 0 || isempty(obj.reducedData{j}.stimEventTypeStruct)
                 if isempty(obj.reducedData{c}.scanNums) || (~plotAllSpikes && all(structfun(@(x)x(c)==0,chanNewSpikes)))
                     continue;
@@ -2376,7 +2376,7 @@ classdef SpikeGrid < most.Model
                     set(obj.hFigs.waveform,'Visible','off');
             end
         end
-            
+        
         
         %     function zprvResetThreshold(obj)
         %
