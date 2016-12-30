@@ -2283,7 +2283,7 @@ classdef SpikeGrid < most.Model
         
         function zprvUpdateWaveformPlot(obj)
             
-            totalNewSpikes = 0;
+            totalNewWaveforms = 0;
             
             %totalClearedSpikes = 0;
             for i=obj.tabChanNumbers
@@ -2292,20 +2292,20 @@ classdef SpikeGrid < most.Model
                 end
                 plotIdx = mod(i-1,obj.PLOTS_PER_TAB) + 1;
                 
-                numNewSpikes = length(obj.reducedData{i}.scanNums);
-                totalNewSpikes = totalNewSpikes + numNewSpikes;
+                numNewWaveforms = length(obj.reducedData{i}.scanNums);
+                totalNewWaveforms = totalNewWaveforms + numNewWaveforms;
                 
                 %Plot new spike lines
                 horizontalRangeScansLength = diff(obj.horizontalRangeScans)+1;
                 xData = linspace(obj.horizontalRange(1),obj.horizontalRange(2),horizontalRangeScansLength)';
                 
-                newSpikeCounts = obj.lastPlottedWaveformCount(i) + (1:numNewSpikes);
-                lineIdxs = mod(newSpikeCounts,obj.waveformsPerPlot) + 1; %The line object indices to use for these newly detected spikes
+                newWaveformCounts = obj.lastPlottedWaveformCount(i) + (1:numNewWaveforms);
+                lineIdxs = mod(newWaveformCounts,obj.waveformsPerPlot) + 1; %The line object indices to use for these newly detected spikes
                 
                 % Clear spikes (if necessary)
                 switch obj.waveformsPerPlotClearMode
                     case 'all'
-                        if obj.lastPlottedWaveformCountSinceClear(i) + numNewSpikes > obj.waveformsPerPlot
+                        if obj.lastPlottedWaveformCountSinceClear(i) + numNewWaveforms > obj.waveformsPerPlot
                             obj.hSpikeLines(plotIdx).clearpoints();
                             obj.lastPlottedWaveformCountSinceClear(i) = 0;
                         end
@@ -2320,7 +2320,7 @@ classdef SpikeGrid < most.Model
                     j=0; % used only to pass assert in nested function below. J=0 in this case because we are referring to a previous waveform (as a product of a previously detected stimulus or spike)
                     znstPlotWaveform(obj.partialWaveformBuffer{1,i});
                 else
-                    for j=1:numNewSpikes
+                    for j=1:numNewWaveforms
                         znstPlotWaveform(obj.reducedData{i}.waveforms{j});
                     end
                 end
