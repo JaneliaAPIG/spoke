@@ -1646,7 +1646,7 @@ classdef SpikeGrid < most.Model
                 try
                    
                     scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
-                    
+                    newLength = [];
                     
                     for h=1:numel(obj.neuralChanAcqList)
                         i = obj.sglChanSubset(h)+1;
