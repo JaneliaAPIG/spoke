@@ -115,7 +115,7 @@ classdef SpikeGrid < most.Model
         %Handle graphics specific to waveform display
         hPlots; %Array of axes handles, one for each axes in grid
         hThresholdLines; %Cell array of line handles, marking threshold level for each plot in grid
-        hSpikeLines; %Array of animated line objects for each plotted spike waveform
+        hWaveforms; %Array of animated line objects for each plotted waveform
         
         %Handle graphics specific to raster display
         hRasters; %Array of axes handles, one for each axes in grid
@@ -281,9 +281,9 @@ classdef SpikeGrid < most.Model
             obj.hThresholdLines = repmat({ones(numNeuralChans,1) * -1},2,1);
             
             %Allocate spike waveforms & raster plots
-            obj.hSpikeLines = gobjects(numNeuralChans,1);
+            obj.hWaveforms = gobjects(numNeuralChans,1);
             for i=1:obj.PLOTS_PER_TAB
-                obj.hSpikeLines(i) = animatedline('Parent',obj.hPlots(i),'Color','k','MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','-');
+                obj.hWaveforms(i) = animatedline('Parent',obj.hPlots(i),'Color','k','MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','-');
             end
             obj.zprvInitializeRasterGridLines();
             
@@ -1013,9 +1013,9 @@ classdef SpikeGrid < most.Model
                 case 'waveform'
                     obj.zprvClearPlots('waveform');
                     %                     for i=1:numDispChans
-                    %                         handlesToClear = [handlesToClear; obj.hSpikeLines{i}(isgraphics(obj.hSpikeLines{i}))'];
+                    %                         handlesToClear = [handlesToClear; obj.hWaveforms{i}(isgraphics(obj.hWaveforms{i}))'];
                     %                     end
-                    %                     %VI051012: Seems like we should probably clear out obj.hSpikeLines here too
+                    %                     %VI051012: Seems like we should probably clear out obj.hWaveforms here too
                     %                     %set(handlesToClear,'EraseMode','normal');
                     %                     delete(handlesToClear);
                     
@@ -2306,7 +2306,7 @@ classdef SpikeGrid < most.Model
                 switch obj.waveformsPerPlotClearMode
                     case 'all'
                         if obj.lastPlottedWaveformCountSinceClear(i) + numNewWaveforms > obj.waveformsPerPlot
-                            obj.hSpikeLines(plotIdx).clearpoints();
+                            obj.hWaveforms(plotIdx).clearpoints();
                             obj.lastPlottedWaveformCountSinceClear(i) = 0;
                         end
                     case 'oldest'
@@ -2352,7 +2352,7 @@ classdef SpikeGrid < most.Model
                         end
                 end
                 %Update line object with waveform for current spike
-                obj.hSpikeLines(plotIdx).addpoints(vertcat(xData, NaN),vertcat(waveform, NaN)); % old
+                obj.hWaveforms(plotIdx).addpoints(vertcat(xData, NaN),vertcat(waveform, NaN)); % old
                 obj.lastPlottedWaveformCount(i) = obj.lastPlottedWaveformCount(i) + 1;
                 obj.lastPlottedWaveformCountSinceClear(i) = obj.lastPlottedWaveformCountSinceClear(i) + 1;
             end
@@ -2601,8 +2601,8 @@ classdef SpikeGrid < most.Model
                     
                     
                     %preallocate animated lines for spike waveforms
-                    %obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','none');
-                    obj.hSpikeLines(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',obj.maxPointsPerAnimatedLine,'Marker','.','MarkerSize',3,'LineStyle','-');
+                    %obj.hWaveforms(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','none');
+                    obj.hWaveforms(j) = animatedline('Parent',obj.hPlots(j),'MaximumNumPoints',obj.maxPointsPerAnimatedLine,'Marker','.','MarkerSize',3,'LineStyle','-');
                 end
             end
             
