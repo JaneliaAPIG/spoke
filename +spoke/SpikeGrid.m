@@ -139,8 +139,8 @@ classdef SpikeGrid < most.Model
         baselineRMSLastScan = 0; %Last scan number at which threshold RMS value was updated
         
         reducedData = {}; %Cell array, one cell per available neural channel, of structures storing reduced data from the raw data (timestamps, waveform snippets, stimulus-tagged timestamps), based on detected stimuli and/or spike(s)
-        lastPlottedSpikeCount = []; %Scalar array specifying the spike count, for each channel that's been last plotted
-        lastPlottedSpikeCountSinceClear = []; %Scalar array specificying the spike count, for each channel that's been last plotted (cleared every time a channel is cleared) - only used for 'all' plot clear mode.
+        lastPlottedWaveformCount = []; %Scalar array specifying the spike count, for each channel that's been last plotted
+        lastPlottedWaveformCountSinceClear = []; %Scalar array specificying the spike count, for each channel that's been last plotted (cleared every time a channel is cleared) - only used for 'all' plot clear mode.
         %globalMean; %Global mean value across acquisition channels, computed from all non-spike-window scan from within last baselineRMSTime, if globalMeanSubtraction=true is nonempty
         
         %baselineRMSExcludedScans; %Array of numbers, one per channel, indicating number of scans included into RMS calculation, from within last baselineRMSTime
@@ -2299,15 +2299,15 @@ classdef SpikeGrid < most.Model
                 horizontalRangeScansLength = diff(obj.horizontalRangeScans)+1;
                 xData = linspace(obj.horizontalRange(1),obj.horizontalRange(2),horizontalRangeScansLength)';
                 
-                newSpikeCounts = obj.lastPlottedSpikeCount(i) + (1:numNewSpikes);
+                newSpikeCounts = obj.lastPlottedWaveformCount(i) + (1:numNewSpikes);
                 lineIdxs = mod(newSpikeCounts,obj.spikesPerPlot) + 1; %The line object indices to use for these newly detected spikes
                 
                 % Clear spikes (if necessary)
                 switch obj.spikesPerPlotClearMode
                     case 'all'
-                        if obj.lastPlottedSpikeCountSinceClear(i) + numNewSpikes > obj.spikesPerPlot
+                        if obj.lastPlottedWaveformCountSinceClear(i) + numNewSpikes > obj.spikesPerPlot
                             obj.hSpikeLines(plotIdx).clearpoints();
-                            obj.lastPlottedSpikeCountSinceClear(i) = 0;
+                            obj.lastPlottedWaveformCountSinceClear(i) = 0;
                         end
                     case 'oldest'
                         
@@ -2353,8 +2353,8 @@ classdef SpikeGrid < most.Model
                 end
                 %Update line object with waveform for current spike
                 obj.hSpikeLines(plotIdx).addpoints(vertcat(xData, NaN),vertcat(waveform, NaN)); % old
-                obj.lastPlottedSpikeCount(i) = obj.lastPlottedSpikeCount(i) + 1;
-                obj.lastPlottedSpikeCountSinceClear(i) = obj.lastPlottedSpikeCountSinceClear(i) + 1;
+                obj.lastPlottedWaveformCount(i) = obj.lastPlottedWaveformCount(i) + 1;
+                obj.lastPlottedWaveformCountSinceClear(i) = obj.lastPlottedWaveformCountSinceClear(i) + 1;
             end
             
         end
@@ -2488,8 +2488,8 @@ classdef SpikeGrid < most.Model
             
             numNeuralChans = numel(obj.neuralChansAvailable);
             
-            obj.lastPlottedSpikeCount = zeros(numNeuralChans,1);
-            obj.lastPlottedSpikeCountSinceClear = zeros(numNeuralChans,1);
+            obj.lastPlottedWaveformCount = zeros(numNeuralChans,1);
+            obj.lastPlottedWaveformCountSinceClear = zeros(numNeuralChans,1);
             
             obj.reducedData = cell(numNeuralChans,1);
             for i=1:1:numNeuralChans
