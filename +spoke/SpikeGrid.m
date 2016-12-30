@@ -1456,8 +1456,14 @@ classdef SpikeGrid < most.Model
                 %Housekeeping: Form rawDataBuffer, appending new data
                 bufStartScanNum = znstAugmentRawDataBuffer(scansToRead, newData);
                 
+                %Not sure what actual edge case this checks for. Let's warn
+                %instead of returning preemptively (which causes a
+                %guaranteed error). TODO: review what cases this might pertain to.
                 if size(obj.rawDataBuffer,1) < (obj.horizontalRangeScans(2) + 2)
-                    return;
+                    %return; %warn instead of returning preemptively
+                    if ~rasterDisplayMode
+                        warning('Size rawDataBuffer is small relative to horizontalRange. This is suspected to potentially cause an issue/error.\n');
+                    end
                 end
                 
                 t3 = toc(t0);
