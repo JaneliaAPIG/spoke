@@ -22,7 +22,7 @@ Coming soon
 [Visit the Wiki](https://github.com/JaneliaAPIG/spoke/wiki) for Getting Started and other documentation. 
 
 ## Credits
-* Vijay Iyer: Version 1.0
+* Vijay Iyer: Initial Implementation & Version 1.0
 * Edward Kang: Version 1.0 
 * Bill Karsh: MATLAB interface to SpikeGLX
 
