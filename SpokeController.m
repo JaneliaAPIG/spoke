@@ -1,4 +1,4 @@
-classdef SpikeGridController < most.Controller;
+classdef SpokeController < most.Controller;
   %SPIKEGRIDCONTROLLER Summary of this class goes here
   %   Detailed explanation goes here
   

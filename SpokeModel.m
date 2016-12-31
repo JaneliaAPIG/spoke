@@ -1,4 +1,4 @@
-classdef SpikeGrid < most.Model
+classdef SpokeModel < most.Model
     %SPIKEGRID Application class for Spoke; all its functionality is implemplemented here
     % See project wiki for both user & developer overview documentation 
     % See end-of-file for nitty-gritty developer notes
