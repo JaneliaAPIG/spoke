@@ -1,5 +1,6 @@
 function spoke(ipAddress)
-% This is spoke, an interface for acquiring data via SpikeGL
+% Launcher for Spoke application 
+% See project wiki for user & developer documentation 
 
 % Fix for freezing of MATLAB when running in hardware OpenGL mode.
 % TODO: Fix Spoke to work with Hardware Rendering!!
@@ -21,12 +22,12 @@ if nargin == 0
    sprintf('Detected local IP Address %s. Connecting to the SpikeGL Remote Connection server.',ipAddress);
 end    
    
-hGrid = spoke.SpikeGrid(ipAddress);
-hGridCtl = spoke.SpikeGridController(hGrid);
+hSpoke = SpokeModel(ipAddress);
+hSpokeCtl = SpokeController(hSpoke);
 
-assignin('base','hGrid',hGrid);
-assignin('base','hGridCtl',hGridCtl);
+assignin('base','hGrid',hSpoke);
+assignin('base','hGridCtl',hSpokeCtl);
 
-set(hGridCtl.hGUIsArray,'CloseRequestFcn',@(src,evnt)hGrid.delete); % For the momnet GUIs owned by Controller are never really killed
+set(hSpokeCtl.hGUIsArray,'CloseRequestFcn',@(src,evnt)hSpoke.delete); % For the moment GUIs owned by Controller are never really killed
 
-hGrid.initialize();
+hSpoke.initialize();
