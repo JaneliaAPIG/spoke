@@ -1,5 +1,7 @@
 classdef SpikeGrid < most.Model
-    %SPIKEGRID Summary of this class goes here
+    %SPIKEGRID Application class for Spoke; all its functionality is implemplemented here
+    % See project wiki for both user & developer overview documentation 
+    % See end-of-file for nitty-gritty developer notes
     
     
     
@@ -2874,3 +2876,10 @@ end
 function dfprintf(varargin)
 fprintf(varargin{:});
 end
+
+%% Developer notes
+%
+% UNITS OF PROCESSING: Processing is done in volts/bit through most of
+% pipeline. Conversion to volts done only in spots where needed: threshold
+% determination (if in volts units) & plotting (if in volts units).
+
