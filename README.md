@@ -25,5 +25,3 @@ Coming soon
 * Vijay Iyer: Initial Implementation & Version 1.0
 * Edward Kang: Version 1.0 
 * Bill Karsh: MATLAB interface to SpikeGLX
-
-## Running Spoke
