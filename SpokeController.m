@@ -1,6 +1,6 @@
 classdef SpokeController < most.Controller;
-  %SPIKEGRIDCONTROLLER Summary of this class goes here
-  %   Detailed explanation goes here
+  %SPIKEGRIDCONTROLLER Controller class for Spoke application, managing the GUI and configuration file interfaces
+  
   
   %% ABSTRACT PROPERTY REALIZATIONS (most.Controller)
   properties (SetAccess=protected)
