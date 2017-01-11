@@ -234,7 +234,7 @@ classdef SpokeModel < most.Model
     %% CONSTRUCTOR/DESTRUCTOR
     methods
         
-        function obj = SpikeGrid(sglIPAddress)
+        function obj = SpokeModel(sglIPAddress)
             
             %Process inputs
             obj.sglIPAddress = sglIPAddress;

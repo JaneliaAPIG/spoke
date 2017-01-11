@@ -33,7 +33,7 @@ classdef SpokeController < most.Controller;
   %% CONSTRUCTOR/DESTRUCTOR
   methods
     
-    function obj = SpikeGridController(hModel)
+    function obj = SpokeController(hModel)
       obj = obj@most.Controller(hModel,{'SpikeGrid'},{});  
       
       set(obj.hGUIs.SpikeGrid,'Name','Spoke Grid Control');      
