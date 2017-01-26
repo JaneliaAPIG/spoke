@@ -1710,9 +1710,12 @@ classdef SpikeGrid < most.Model
                 temp2 = find(temp1 > triggerThreshVal);
                 %stimIdx = find((diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > triggerThreshVal) == 1,1);
                 stimIdx = find(diff(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx)) > triggerThreshVal);
-
+                
                 while ~isempty(stimIdx)
-                fprintf('stimIdx: %s\n',mat2str(stimIdx));
+                    figure(100)
+                    ylim([-2 2]);                
+                    plot(obj.rawDataBuffer(spikeDataBufStartIdx:end,stimChanRawDataIdx));
+                    fprintf('stimIdx: %s\n',mat2str(stimIdx));
                     if stimIdx ~= stimIdx % Discard false stimuli detected on the first sample.
                         %fprintf('size of raw data buffer: %s\n',mat2str(size(obj.rawDataBuffer)));
 
@@ -1900,8 +1903,12 @@ classdef SpikeGrid < most.Model
                 rmsDataIdxs = {1:(size(obj.rawDataBuffer,1)-obj.horizontalRangeScans(2))};
                 rmsDataIdxs = repmat(rmsDataIdxs,numNeuralChans,1);
 
-                %firstPassMode = isempty(newSpikeScanNums); %Handle first pass at RMS detection, when there are no detected spikes yet
-                firstPassMode = all(cellfun('isempty',newSpikeScanNums) == 1);
+                if iscell(newSpikeScanNums)
+                    firstPassMode = all(cellfun('isempty',newSpikeScanNums) == 1);
+                else
+                    firstPassMode = isempty(newSpikeScanNums); %Handle first pass at RMS detection, when there are no detected spikes yet
+                end
+                
                 if ~firstPassMode
                     %for i=1:numNeuralChans
                     %for i=1:numel(obj.sglChanSubset)
