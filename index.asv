@@ -32,7 +32,7 @@
           <h3>What is Spoke?</h3>
       </section>
       <footer>
-          <p>This project is owned by Tim Harris' <a href="https://www.janelia.org/lab/harris-lab-apig" target="_blank">Applied Physics and Instrumentation Group</a> (<a href="https://github.com/JaneliaAPIG">JaneliaAPIG</a>) at Janelia Research Campus.</p>
+        <p>This project is owned by Tim Harris' Applied Physics and Instrumentation Group <a href="https://github.com/JaneliaAPIG">JaneliaAPIG</a></p>
         <p>Current Maintainer and V1.0 Author: Edward Kang (<a href="https://github.com/edwardkangdev" target="_blank">edwardkangdev</a>)</p>
         <p>Initial Implementation and V1.0 Author: Vijay Iyer (<a href="https://github.com/vijayiyer05" target="_blank">vijayiyer5</a>)</p>
         
