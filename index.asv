@@ -17,9 +17,7 @@
       <header>
         <h1>Spoke</h1>
         <p>Live display of neural spike data for SpikeGLX software</p>
-
         <p class="view"><a href="https://github.com/JaneliaAPIG/spoke">View the Project on GitHub <small>JaneliaAPIG/spoke</small></a></p>
-
         <ul>
           <li><a href="https://github.com/JaneliaAPIG/spoke/zipball/master">Download <strong>ZIP File</strong></a></li>
           <li><a href="https://github.com/JaneliaAPIG/spoke/tarball/master">Download <strong>TAR Ball</strong></a></li>
@@ -28,18 +26,35 @@
       </header>
       <section>
           <h3>News</h3>
-          Spoke V1.0 has been released! Please download the latest version of Spoke using the links to the left.
+          <ul><li>
+                  <b>Spoke V1.0 has been released!</b> Please download the latest version of Spoke using the links to the left.
+          </li></ul>
           <h3>What is Spoke?</h3>
+          <h3>Hardware Requirements</h3>
+          
+          <h3>Software Requirements</h3>
+          <ul>
+              <li>
+                  <a href="https://www.mathworks.com/products/new_products/release2015b.html" target="_blank">MATLAB 2015b</a>
+              </li>
+              <li>
+                  <a href="https://www.mathworks.com/products/signal.html" target="_blank">Signal Processing Toolbox</a>
+              </li>                  
+              <li>
+                  <b>Note:</b><i> If you already have a license for MATLAB, you can install MATLAB 2015b and simply register using your existing license. This is important since many users of MATLAB may have initially purchased newer versions of MATLAB. This will not prevent you from installing MATLAB 2015b and Spoke.
+              </li>
+          </ul>
+          <h3>Getting Started</h3>
+          <h3>Running an Experiment</h3>
       </section>
       <footer>
-          <p>This project is owned by Tim Harris' <a href="https://www.janelia.org/lab/harris-lab-apig" target="_blank">Applied Physics and Instrumentation Group</a> (<a href="https://github.com/JaneliaAPIG">JaneliaAPIG</a>) at Janelia Research Campus.</p>
+        <p>This project is owned by Tim Harris' <a href="https://www.janelia.org/lab/harris-lab-apig" target="_blank">Applied Physics and Instrumentation Group</a> (<a href="https://github.com/JaneliaAPIG" target="_blank">JaneliaAPIG</a>) at Janelia Research Campus.</p>
         <p>Current Maintainer and V1.0 Author: Edward Kang (<a href="https://github.com/edwardkangdev" target="_blank">edwardkangdev</a>)</p>
         <p>Initial Implementation and V1.0 Author: Vijay Iyer (<a href="https://github.com/vijayiyer05" target="_blank">vijayiyer5</a>)</p>
-        <p>MATLAB interface to <a href="httpSpikeGLX: Bill Karsh (<a href="https://github.com/billkarsh" target="_blank">billkarsh</a>)</p>
+        <p>MATLAB interface to <a href="http://billkarsh.github.io/SpikeGLX/" target="_blank">SpikeGLX</a>: Bill Karsh (<a href="https://github.com/billkarsh" target="_blank">billkarsh</a>)</p>
         <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
       </footer>
     </div>
-    <script src="javascripts/scale.fix.js"></script>
-    
+    <script src="javascripts/scale.fix.js"></script>    
   </body>
 </html>
