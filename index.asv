@@ -12,8 +12,9 @@
     <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
     <![endif]-->
   </head>
-  <body>
+  <body>          
     <div class="wrapper">
+      <img src="whisperbox.jpg"><br>
       <header>
         <h1>Spoke</h1>
         <p>Live display of neural spike data for SpikeGLX software</p>
@@ -26,26 +27,44 @@
       </header>
       <section>
           <h3>News</h3>
-          <ul><li>
-                  <b>Spoke V1.0 has been released!</b> Please download the latest version of Spoke using the links to the left.
-          </li></ul>
+          <ul>
+          <li>
+              <b>Spoke V1.0 has been released!</b> Please download the latest version of Spoke using the links to the left.
+          </li>
+          <li>
+              IMEC probe support is possible in the future, please let us know if you have an interest in using Spoke with IMEC probes!
+          </li>
+          </ul>
           <h3>What is Spoke?</h3>
           <h3>Hardware Requirements</h3>
-          
+          <ul>
+              <li>
+                  Janelia WHISPER Extracellular recording system
+              </li>
+              <li>
+              </li>
+          </ul>
           <h3>Software Requirements</h3>
           <ul>
               <li>
-                  <a href="https://www.mathworks.com/products/new_products/release2015b.html" target="_blank">MATLAB 2015b</a>
+                  <a href="https://www.mathworks.com/products/new_products/release2015b.html" target="_blank">MATLAB 2015b</a><br>
+                  <b>Note:</b><i> If you already have a license for MATLAB, you can install MATLAB 2015b and simply register using your existing license. This is important since many users of MATLAB may have initially purchased newer versions of MATLAB. This will not prevent you from installing MATLAB 2015b and Spoke.</i>
               </li>
               <li>
-                  <a href="https://www.mathworks.com/products/signal.html" target="_blank">Signal Processing Toolbox</a>
-              </li>                  
+                  <a href="https://www.mathworks.com/products/signal.html" target="_blank">MATLAB Signal Processing Toolbox</a>
+              </li>
               <li>
-                  <b>Note:</b><i> If you already have a license for MATLAB, you can install MATLAB 2015b and simply register using your existing license. This is important since many users of MATLAB may have initially purchased newer versions of MATLAB. This will not prevent you from installing MATLAB 2015b and Spoke.
+                  National Instruments Measurement & Automation Explorer (NI MAX) (This is now a component of the full <a href="http://www.ni.com/download/ni-daqmx-15.1.1/5665/en/" target="_blank">NI System Configuration (aka NI DAQmx)</a> software suite.)
+              </li>
+              <li>
+                  <a href="http://billkarsh.github.io/SpikeGLX/" target="_blank">SpikeGLX</a>, written and maintained by Bill Karsh. Spoke has been tested with the latest version of SpikeGLX (Release 20161201).<br>
+                  <b>Note:</b> <i>You will need to start SpikeGLX and have an acquisition running prior to starting Spoke. Spoke requires a running SpikeGLX acquisition in order to operate properly.</i>
               </li>
           </ul>
           <h3>Getting Started</h3>
+          <h3>Spoke Controls</h3>
           <h3>Running an Experiment</h3>
+          <h3>Help! Common Errors and How to Deal with Them</h3>
       </section>
       <footer>
         <p>This project is owned by Tim Harris' <a href="https://www.janelia.org/lab/harris-lab-apig" target="_blank">Applied Physics and Instrumentation Group</a> (<a href="https://github.com/JaneliaAPIG" target="_blank">JaneliaAPIG</a>) at Janelia Research Campus.</p>

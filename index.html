@@ -12,8 +12,9 @@
     <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
     <![endif]-->
   </head>
-  <body>
+  <body>          
     <div class="wrapper">
+      <img alt="A picture of the WHISPER Extracellular Recording System" title="A picture of the WHISPER Extracellular Recording System" src="whisperbox.jpg"><br>
       <header>
         <h1>Spoke</h1>
         <p>Live display of neural spike data for SpikeGLX software</p>
@@ -26,29 +27,62 @@
       </header>
       <section>
           <h3>News</h3>
-          <ul><li>
-                  <b>Spoke V1.0 has been released!</b> Please download the latest version of Spoke using the links to the left.
-          </li></ul>
+          <ul>
+          <li>
+              <b>Spoke V1.0 has been released!</b> Please download the latest version of Spoke using the links to the left.
+          </li>
+          <li>
+              <b>IMEC probe</b> support is possible in the future, please let us know if you have an interest in using Spoke with IMEC probes!
+          </li>
+          </ul>
           <h3>What is Spoke?</h3>
+          Spoke is a MATLAB app for live display of neural data from high-channel-count recording systems. It offers multiple experimenter-optimized display modes based on data reduction of high-channel-count data streams.<br><br>
+          It is designed around the Whisper extracellular recording system developed at HHMI/Janelia Research Campus in the APIG lab of Tim Harris and its accompanying [SpikeGLX] (https://github.com/billkarsh/SpikeGLX) neural recording software.<br><br>
+          Spoke is developed & maintained by the APIG Lab at HHMI/Janelia Research Campus.<br><br>
           <h3>Hardware Requirements</h3>
-          
+          <ul>
+              <li>
+                  <a href="https://www.janelia.org/lab/harris-lab-apig/apig-research/extracellular-electrophysiology#_com_1" target="_blank">Janelia WHISPER Extracellular recording system + Headstage</a>
+              </li>
+              <li>
+                  <a href="http://www.ni.com/en-us/shop/select/multifunction-io-device?modelId=124941" target="_blank">National Instruments NI USB-6366 (or equivalent) X-Series Multifunction DAQ Device</a>
+                  <ul>
+                    <li>8 simultaneous analog inputs at 2 MS/s/ch with 16-bit resolution; 16 MS/s total AI throughput</li>
+                    <li>Deep onboard memory (32 or 64 MS) to ensure finite acquisitions, even with competing USB traffic</li>
+                    <li>2 analog outputs, 3.33 MS/s, 16-bit resolution, 10 V</li>
+                    <li>24 digital I/O lines (8 hardware-timed up to 1 MHz)</li>
+                    <li>Four 32-bit counter/timers for PWM, encoder, frequency, event counting, and more</li>
+                    <li>Advanced timing and triggering with NI-STC3 timing and synchronization technology</li>
+                 </ul>
+              </li>
+              <li>
+                  <a href="http://sine.ni.com/nips/cds/view/p/lang/en/nid/201628" target="_blank">NI SHC68-68-EPM Extended Performance Shielded Cable for X Series, M Series</a> (to connect the WHISPER box to the NI Multifunction DAQ Device)
+              </li>
+          </ul>
           <h3>Software Requirements</h3>
           <ul>
               <li>
-                  <a href="https://www.mathworks.com/products/new_products/release2015b.html" target="_blank">MATLAB 2015b</a>
+                  <a href="https://www.mathworks.com/products/new_products/release2015b.html" target="_blank">MATLAB 2015b</a><br>
+                  <b>Note:</b><i> If you already have a license for MATLAB, you can install MATLAB 2015b and simply register using your existing license. This is important since many users of MATLAB may have initially purchased newer versions of MATLAB. This will not prevent you from installing MATLAB 2015b and using Spoke. Spoke may work with later versions of MATLAB, but it's not guaranteed.</i>
               </li>
               <li>
-                  <a href="https://www.mathworks.com/products/signal.html" target="_blank">Signal Processing Toolbox</a>
+                  <a href="https://www.mathworks.com/products/signal.html" target="_blank">MATLAB Signal Processing Toolbox</a>
               </li>
               <li>
-                  
+                  National Instruments Measurement & Automation Explorer (NI MAX) (This is now a component of the full <a href="http://www.ni.com/download/ni-daqmx-15.1.1/5665/en/" target="_blank">NI System Configuration (aka NI DAQmx)</a> software suite.)
               </li>
               <li>
-                  <b>Note:</b><i> If you already have a license for MATLAB, you can install MATLAB 2015b and simply register using your existing license. This is important since many users of MATLAB may have initially purchased newer versions of MATLAB. This will not prevent you from installing MATLAB 2015b and Spoke.</i>
+                  <a href="http://billkarsh.github.io/SpikeGLX/" target="_blank">SpikeGLX</a>, written and maintained by Bill Karsh. Spoke has been tested with the latest version of SpikeGLX (Release 20161201).<br>
+                  <b>Note:</b> <i>You will need to start SpikeGLX and have an acquisition running prior to starting Spoke. Spoke requires a running SpikeGLX acquisition in order to operate properly.</i>
               </li>
           </ul>
           <h3>Getting Started</h3>
+          <a href="whispertoni.jpg" target="_blank"><img src="whispertoni.jpg"></a>
+          <h3>Spoke Controls</h3>
+          
           <h3>Running an Experiment</h3>
+          
+          <h3>Help! Common Errors and How to Deal with Them</h3>
       </section>
       <footer>
         <p>This project is owned by Tim Harris' <a href="https://www.janelia.org/lab/harris-lab-apig" target="_blank">Applied Physics and Instrumentation Group</a> (<a href="https://github.com/JaneliaAPIG" target="_blank">JaneliaAPIG</a>) at Janelia Research Campus.</p>
