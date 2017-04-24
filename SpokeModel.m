@@ -184,6 +184,8 @@ classdef SpokeModel < most.Model
         %waveformWrap/partialWaveformBuffer props handle edge-cases in stim-triggered waveform mode. they could potentially be used for spike-triggered waveform mode.
         waveformWrap = []; %waveform detected towards end of timer processing period; specifies number of samples in the next processing period needed to complete the waveform
         partialWaveformBuffer = {}; % Buffer that holds part of a waveform from prior processing period. Used when waveformWrap is true.
+
+        spokeStarted = false; % Used to define whether or not Spoke has been started.
     end
     
     properties (Hidden, SetAccess=immutable)
@@ -192,7 +194,9 @@ classdef SpokeModel < most.Model
         %Number of logical chans of each of the sub-types available, as configured via the SpikeGLX NI Configuration
         neuralChansAvailable;
         analogMuxChansAvailable;
-        analogSoloChansAvailable;        
+        analogSoloChansAvailable;
+        
+        defaultConfigurationFilename = 'default.cfg';
     end
     
     properties (SetAccess=protected,Hidden,SetObservable,AbortSet)
@@ -283,9 +287,9 @@ classdef SpokeModel < most.Model
             end
             obj.zprvInitializeRasterGridLines();
             
-            obj.verticalRange = [-aiRangeMax aiRangeMax];
+            obj.verticalRange = [-aiRangeMax/10 aiRangeMax/10];
             obj.tabDisplayed = 1;
-            
+                        
             %Clean-up
             Close(obj.hSGL);
             obj.hSGL = [];
@@ -298,6 +302,12 @@ classdef SpokeModel < most.Model
             if ~isempty(obj.getClassDataVar('lastConfigFileName'))
                 obj.loadConfig();
             end
+
+            %Load the last modified configuration.
+            obj.loadDefaultConfig();
+            
+            %Set spoke as "started up". This enables auto-property saving.
+            obj.spokeStarted = true;
         end
         
         function delete(obj)
@@ -431,6 +441,8 @@ classdef SpokeModel < most.Model
                 obj.filterCoefficients = {a b};
             end
             
+            % Side Effects
+            obj.saveDefaultConfig();
         end
         
         
@@ -472,6 +484,9 @@ classdef SpokeModel < most.Model
         function set.psthTimeBin(obj,val)
             obj.validatePropArg('psthTimeBin',val);
             obj.psthTimeBin = val;
+            
+            % Side Effects
+            obj.saveDefaultConfig();            
         end
         
         function set.psthTimerPeriod(obj,val)
@@ -492,6 +507,9 @@ classdef SpokeModel < most.Model
             end
             
             obj.psthTimerPeriod = val;
+
+            % Side Effects
+            obj.saveDefaultConfig();
         end
         
         function set.psthAmpRange(obj,val)
@@ -499,6 +517,9 @@ classdef SpokeModel < most.Model
             
             set(obj.hPSTHs,'YLim',val);
             obj.psthAmpRange = get(obj.hPSTHs(1),'YLim');
+            
+            % Side Effects
+            obj.saveDefaultConfig();
         end
         
         function val = get.numTabs(obj)
@@ -515,6 +536,8 @@ classdef SpokeModel < most.Model
             
             lclVar = ceil(val / obj.refreshRate);
             obj.refreshPeriodMaxWaveformRate = lclVar * obj.refreshRate;
+            
+            obj.saveDefaultConfig();
         end
         
         function val = get.refreshPeriodAvgScans(obj)
@@ -548,6 +571,9 @@ classdef SpokeModel < most.Model
             
             %Side-effects
             obj.refreshPeriodMaxWaveformRate = currMaxSpikeRate;
+            
+            obj.saveDefaultConfig();
+
         end
         
         function val = get.horizontalRangeScans(obj)
@@ -601,7 +627,7 @@ classdef SpokeModel < most.Model
                 %TODO(?): A smarter adjustment based on the last-cached RMS values, somehow handlign the variety across channels
                 switch val
                     case 'volts'
-                        obj.verticalRange = [-1 1] * obj.sglParamCache.niAiRangeMax;
+                        obj.verticalRange = [-.1 .1] * obj.sglParamCache.niAiRangeMax;
                     case 'rmsMultiple'
                         obj.verticalRange = [-2 10] * obj.thresholdVal;
                 end
@@ -609,6 +635,9 @@ classdef SpokeModel < most.Model
                 %Refresh threshold lines
                 obj.zprvDrawThresholdLines();
             end
+            
+            %Side Effects
+            obj.saveDefaultConfig();
         end
         
         
@@ -632,6 +661,8 @@ classdef SpokeModel < most.Model
             
             %Set real property
             obj.verticalRange_ = val;
+            
+            obj.saveDefaultConfig();
         end
         
         function set.verticalRange_(obj,val)
@@ -654,6 +685,7 @@ classdef SpokeModel < most.Model
             %Side-effects
             set(obj.hPlots,'XLim',val);
             
+            obj.saveDefaultConfig();
         end
         
         function val = get.maxPointsPerAnimatedLine(obj)
@@ -675,6 +707,8 @@ classdef SpokeModel < most.Model
         function set.waveformsPerPlot(obj,val)
             obj.validatePropArg('waveformsPerPlot',val);
             obj.waveformsPerPlot = val;
+
+            obj.saveDefaultConfig();
         end
         
         function set.waveformsPerPlotClearMode(obj,val)
@@ -711,14 +745,6 @@ classdef SpokeModel < most.Model
                     obj.spikeRefractoryPeriod = val;
             end
         end
-        
-        %     function val = get.stimEventTypes(obj)
-        %       if isempty(obj.stimEventClassifyFcn)
-        %         val = '';
-        %       else
-        %         val = feval(obj.stimEventClassifyFcn);
-        %       end
-        %     end
         
         function set.stimEventTypesDisplayed(obj,val)
             assert(ischar(val) || iscellstr(val),'Value of ''stimEventTypesDisplayed'' must be either a string or string cell array');
@@ -813,11 +839,15 @@ classdef SpokeModel < most.Model
             
             set(obj.hRasters,'YLim',ylim);
             obj.verticalRangeRaster = val;
+
+            obj.saveDefaultConfig();
         end
         
         function set.verticalRangeRasterInfIncrement(obj,val)
             obj.validatePropArg('verticalRangeRasterInfIncrement',val);
             obj.verticalRangeRasterInfIncrement = val;
+
+            obj.saveDefaultConfig();
         end
         
         function set.stimStartChannel(obj,val)
@@ -825,11 +855,15 @@ classdef SpokeModel < most.Model
             obj.validatePropArg('stimStartChannel',val);
             obj.zprpAssertAuxChan(val,'stimStartChannel'); %Assert any stimulus channel specified is a valid auxiliary channel
             obj.stimStartChannel = val;
+
+            obj.saveDefaultConfig();
         end
         
         function set.stimStartThreshold(obj,val)
             obj.validatePropArg('stimStartThreshold',val);
             obj.stimStartThreshold = val;
+
+            obj.saveDefaultConfig();
         end
         
         function set.horizontalRangeRaster(obj,val)
@@ -842,6 +876,8 @@ classdef SpokeModel < most.Model
             obj.zprvClearPlots('psth');
             
             obj.horizontalRangeRaster = val;
+
+            obj.saveDefaultConfig();
         end
         
         
@@ -899,6 +935,8 @@ classdef SpokeModel < most.Model
             
             %Side-effects
             obj.zprvDrawThresholdLines();
+
+            obj.saveDefaultConfig();
         end
         
         function val = get.baselineStatsRefreshPeriodScans(obj)
@@ -931,6 +969,8 @@ classdef SpokeModel < most.Model
                 %Redraw threshold lines
                 obj.zprvDrawThresholdLines();
             end
+            
+            obj.saveDefaultConfig();
         end
         
         function set.thresholdVal(obj,val)
@@ -941,6 +981,8 @@ classdef SpokeModel < most.Model
             
             %Side-effects
             obj.zprvDrawThresholdLines();
+
+            obj.saveDefaultConfig();
         end
         
         function set.baselineStatsRefreshPeriod(obj,val)
@@ -948,6 +990,8 @@ classdef SpokeModel < most.Model
             obj.validatePropArg('baselineStatsRefreshPeriod',val);
             
             obj.baselineStatsRefreshPeriod = val;
+
+            obj.saveDefaultConfig();
         end
         
     end
@@ -1111,7 +1155,6 @@ classdef SpokeModel < most.Model
         end
         
         function loadConfig(obj,filename)
-            
             if nargin < 2
                 if isempty(obj.configFileName)
                     startName = obj.getClassDataVar('lastConfigFileName');
@@ -1143,9 +1186,8 @@ classdef SpokeModel < most.Model
             obj.setClassDataVar('lastConfigFileName',obj.configFileName);
             
         end
-        
+                
         function saveConfigAs(obj,filename)
-            
             if nargin < 2
                 if isempty(obj.configFileName)
                     startName = obj.getClassDataVar('lastConfigFileName');
@@ -1178,6 +1220,31 @@ classdef SpokeModel < most.Model
             obj.configFileName = filename;
             obj.setClassDataVar('lastConfigFileName',obj.configFileName);
             
+        end
+
+        function loadDefaultConfig(obj)
+            filename = fullfile(pwd,obj.defaultConfigurationFilename);
+            
+            %Check to see if the file exists
+            if exist(filename, 'file') == 2
+                %Load model properties
+                obj.mdlLoadConfig(filename);
+            else
+                fprintf('No default configuration file found. Starting with program defaults.\n');
+            end
+        end
+        
+        function saveDefaultConfig(obj)
+            if (obj.spokeStarted)
+                filename = fullfile(pwd,obj.defaultConfigurationFilename);
+            
+                fprintf('Saving default configuration.\n');
+            
+                %Save model properties
+                obj.mdlSaveConfig(filename,'include',{'verticalRange' 'gridFigPosition' 'psthFigPosition'});
+            else
+                fprintf('Calling saveDefaultConfig, but Spoke has not started yet.\n');
+            end
         end
         
         function plotPSTH(obj)
