@@ -30,7 +30,6 @@ classdef SpokeModel < most.Model
         %Spike waveform display properties
         horizontalRange = [-1 2] * 1e-3; %2 element vector ([pre post]) indicating times, in seconds, to display before and after threshold crossing
         waveformAmpUnits = 'volts'; %One of {'volts' 'rmsMultiple'} indicating units to use for waveform plot display. Value of 'rmsMultiple' only available if thresholdType='rmsMultiple'
-        %verticalRange = [-4000 4000];
         
         waveformsPerPlot = 100; %Number of waveforms to display (overlay) in each channel subplot before clearing
         waveformsPerPlotClearMode = 'all'; %One of {'all' 'oldest'}. Specify waveform-clearing behavior when the waveformsPerPlot limit is reached.
@@ -284,6 +283,7 @@ classdef SpokeModel < most.Model
             obj.zprvInitializeRasterGridLines();
             
             obj.verticalRange = [-aiRangeMax aiRangeMax];
+            obj.verticalRange = obj.verticalRange/1000;
             obj.tabDisplayed = 1;
             
             %Clean-up
@@ -601,7 +601,7 @@ classdef SpokeModel < most.Model
                 %TODO(?): A smarter adjustment based on the last-cached RMS values, somehow handlign the variety across channels
                 switch val
                     case 'volts'
-                        obj.verticalRange = [-1 1] * obj.sglParamCache.niAiRangeMax;
+                        obj.verticalRange = [-.001 .001] * obj.sglParamCache.niAiRangeMax;
                     case 'rmsMultiple'
                         obj.verticalRange = [-2 10] * obj.thresholdVal;
                 end
@@ -922,7 +922,7 @@ classdef SpokeModel < most.Model
                     case 'volts'
                         aiRangeMax = obj.sglParamCache.niAiRangeMax;
                         obj.thresholdVal = .1 * aiRangeMax;
-                        obj.verticalRange = [-1 1] * aiRangeMax;
+                        obj.verticalRange = [-.001 .001] * aiRangeMax;
                     case 'rmsMultiple'
                         obj.thresholdVal = 5;
                         obj.verticalRange = [-2*obj.thresholdVal 10*obj.thresholdVal];
@@ -1395,30 +1395,6 @@ classdef SpokeModel < most.Model
                     fprintf(2,'WARNING. A large number of queued-up samples to read detected: %d. If intermittent, this should not cause a problem.\n',scansToRead_ - scansToRead);
                 end
                 
-                
-                %                 if changedFileName
-                %                     obj.priorfileMaxReadableScanNum = obj.maxReadableScanNum;
-                %                 end
-                %
-                %                 obj.maxReadableScanNum = fileMaxReadableScanNum + obj.priorfileMaxReadableScanNum; %Maintain scan number /across/ file-rollover, not worrying about any gap
-                %
-                %                 if obj.maxReadableScanNum <= 0
-                %                     fprintf(2,'WARNING! maxReadableScanNum: %d\n',obj.maxReadableScanNum);
-                %                 end
-                
-                %
-                %
-                %         %Handle case of restarting acquisition
-                %         if obj.restartPending
-                %           obj.restartPending = false;
-                %
-                %           obj.hSpoke.updateFilename(); %Handle possible (likely) change in filename on stop & restart
-                %
-                %           obj.zprvResetAcquisition();
-                %           obj.zprvClearPlots();
-                %         end
-                %
-                
                 %STAGE 1: Read newly available data
                 %[scansToRead, newData] = znstReadAvailableData(obj.maxReadableScanNum-obj.priorfileMaxReadableScanNum-scansToRead,scansToRead); %obj.bufScanNumEnd will be 0 in case of file-rollover or SpikeGL stop/restart
                 %                 newData = GetDAQData(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglChanSubset);
@@ -1436,7 +1412,7 @@ classdef SpokeModel < most.Model
                 
                 %STAGE 3: Filter data if needed. Also: housekeeping to form fullDataBuffer & partialWaveformBuffer for subsequent processing stages.
                 if ~isempty(obj.filterCoefficients)
-                    [newData,obj.filterCondition] = filter(obj.filterCoefficients{2},obj.filterCoefficients{1},double(newData),obj.filterCondition); %Convert to double..but still in A/D count values, not voltages
+                    [newData(:,1:obj.sglChanSubset),obj.filterCondition] = filter(obj.filterCoefficients{2},obj.filterCoefficients{1},double(newData(:,1:obj.sglChanSubset)),obj.filterCondition); %Convert to double..but still in A/D count values, not voltages
                 end
                 
                 %Housekeeping: Form partialWaveformBuffer, appending new data
