@@ -248,6 +248,12 @@ footer {
   -webkit-font-smoothing:subpixel-antialiased;
 }
 
+.captiontext {
+	font-weight: bold;
+	background-color:#EEEEEE;
+	text-align:center;
+}
+
 @media print, screen and (max-width: 960px) {
 
   div.wrapper {

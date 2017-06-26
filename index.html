@@ -83,26 +83,25 @@
               <li><b>Step 2</b>: Connect the Chronic Headstage to the Whisper box.</li>
               <li><b>Step 3</b>: Start up SpikeGLX</li>
               <ul>
-                  <li><figure><img src="spikeglx.JPG"><figcaption>Click on the SpikeGLX executable</figcaption></figure></li>
-                  <li><img src="spikeglx_newacq.JPG"></li>
-                  <li><img src="config_acq_1.JPG"></li>
-                  <li><img src="config_acq_2.JPG"></li>
-                  <li><img src="config_acq_3.JPG"></li>
-                  <li><img src="config_acq_4.JPG"></li>
-                  <li><img src="config_acq_5.JPG"></li>
+                  <li><figure><img src="spikeglx.JPG"><figcaption class="captiontext">Click on the SpikeGLX executable</figcaption></figure></li>
+                  <li><figure><img src="spikeglx_newacq.JPG"><figcaption class="captiontext">In the "File" dropdown, select "New Acquisition".</figcaption></figure></li>
+                  <li><figure><img src="config_acq_1.JPG"><figcaption class="captiontext">In the "Devices" tab, click on the "Detect" button. The lower box should list all of your NI devices, including the NI-6366 you have connected to the WHISPER box.</figcaption></figure></li>
+                  <li><figure><img src="config_acq_2.JPG"><figcaption class="captiontext">In the NI Setup tab, you can change the select the muxes assigned to neural channels and analog channels. If you want to operate in Triggered Waveform or Raster mode, you <i>must</i> define MA mux analog channels.</figcaption></figure></li>
+                  <li><figure><img src="config_acq_3.JPG"><figcaption class="captiontext">The Gates tab is typically unused for Spoke.</figcaption></figure></li>
+                  <li><figure><img src="config_acq_4.JPG"><figcaption class="captiontext">The Triggers tab is typically unused for Spoke.</figcaption></figure></li>
+                  <li><figure><img src="config_acq_5.JPG"><figcaption class="captiontext">The See N' Save tab is important. You can perform channel remapping (see SpikeGLX documentation), and you can also define the Channels to Save to disk during an acquisition. Spoke will only see those channels you list in the "IM" section.</figcaption></figure></li>
               </ul>
               <li><b>Step 4</b>: Start up Matlab</li>              
               <li><b>Step 5</b>: Start up Spoke<br><img src="matlab_spoke_start.JPG"></li>
           </ul>          
           <h3>Spoke Controls</h3>
           <ul>
-              <li>Spike Detection Mode</li>
-              
           </ul>
           <h3>Running an Experiment</h3>
           <ul>
-              <li>Spike Detection Mode</li>
-              
+              <li>Spike Detection Mode (Waveform Triggered)</li>
+              <li>Stimulus Detection Mode (Stimulus Triggered Waveform)</li>
+              <li>Raster Mode (Stimulus Triggered Raster)</li>              
           </ul>
           <h3>Help! Common Errors and How to Deal with Them</h3>
           <ul>
