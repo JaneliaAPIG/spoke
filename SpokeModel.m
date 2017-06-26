@@ -30,7 +30,6 @@ classdef SpokeModel < most.Model
         %Spike waveform display properties
         horizontalRange = [-1 2] * 1e-3; %2 element vector ([pre post]) indicating times, in seconds, to display before and after threshold crossing
         waveformAmpUnits = 'volts'; %One of {'volts' 'rmsMultiple'} indicating units to use for waveform plot display. Value of 'rmsMultiple' only available if thresholdType='rmsMultiple'
-        %verticalRange = [-4000 4000];
         
         waveformsPerPlot = 100; %Number of waveforms to display (overlay) in each channel subplot before clearing
         waveformsPerPlotClearMode = 'all'; %One of {'all' 'oldest'}. Specify waveform-clearing behavior when the waveformsPerPlot limit is reached.
@@ -125,9 +124,9 @@ classdef SpokeModel < most.Model
         hRasterLines; %Cell array of arrays, one per stimEventType, containing animated line objects for each raster plot in grid
         
         numActiveTabs;
-        
-        %         neuralChans; %Acquisition channel numbers corresponding to neural inputs. Ordered as in SpikeGLX connection.
-        %         auxChans; %Acquisition channel numbers corresponding to auxiliary inputs, i.e. suited for gating/stimulus. These are /not/ displayed. Ordered as in SpikeGLX connection.
+
+        %neuralChans; %Acquisition channel numbers corresponding to neural inputs. Ordered as in SpikeGLX connection.
+        %auxChans; %Acquisition channel numbers corresponding to auxiliary inputs, i.e. suited for gating/stimulus. These are /not/ displayed. Ordered as in SpikeGLX connection.
         sglChanSubset; %subset of SpikeGLX channels  (includes neural and non-neural channels)
         
         neuralChanDispOrder; %Order in which neuralChans should be displayed. Includes all acquired neural chans, whether included in subset or not.
@@ -184,6 +183,8 @@ classdef SpokeModel < most.Model
         %waveformWrap/partialWaveformBuffer props handle edge-cases in stim-triggered waveform mode. they could potentially be used for spike-triggered waveform mode.
         waveformWrap = []; %waveform detected towards end of timer processing period; specifies number of samples in the next processing period needed to complete the waveform
         partialWaveformBuffer = {}; % Buffer that holds part of a waveform from prior processing period. Used when waveformWrap is true.
+        
+        verticalRangeCache; % A struct used to persist the last value used for verticalRange in each mode.
     end
     
     properties (Hidden, SetAccess=immutable)
@@ -283,7 +284,7 @@ classdef SpokeModel < most.Model
             end
             obj.zprvInitializeRasterGridLines();
             
-            obj.verticalRange = [-aiRangeMax aiRangeMax];
+            obj.verticalRange = [-aiRangeMax aiRangeMax] / 1000; % Use millivolts for spikes.
             obj.tabDisplayed = 1;
             
             %Clean-up
@@ -586,32 +587,21 @@ classdef SpokeModel < most.Model
         
         function set.waveformAmpUnits(obj,val)
             obj.validatePropArg('waveformAmpUnits',val);
-            
-            if strcmpi(obj.thresholdType,'volts')
-                val = 'volts'; %Value of 'rmsMultiple' only possible if thresholdType='rmsMultiple'
-            end
-            
-            oldVal = obj.waveformAmpUnits;
+
+            % Save old value of vertical range to cache.
+            oldVal = obj.waveformAmpUnits;          
+            obj.verticalRangeCache.(obj.waveformAmpUnits) = obj.verticalRange;
+
+            % Update the property value.
             obj.waveformAmpUnits = val;
-            
-            %Side-effects
-            if ~strcmpi(oldVal,val)
-                %Adjust thresholdVal & verticalRange
-                
-                %TODO(?): A smarter adjustment based on the last-cached RMS values, somehow handlign the variety across channels
-                switch val
-                    case 'volts'
-                        obj.verticalRange = [-1 1] * obj.sglParamCache.niAiRangeMax;
-                    case 'rmsMultiple'
-                        obj.verticalRange = [-2 10] * obj.thresholdVal;
-                end
-                
-                %Refresh threshold lines
-                obj.zprvDrawThresholdLines();
-            end
+
+            % Check to see if cached value exists in struct.
+            if isfield(obj.verticalRangeCache,(val))
+                %Restore cached value of vertical range if it exists.
+                obj.verticalRange = obj.verticalRangeCache.(val);
+            end            
         end
-        
-        
+               
         function val = get.verticalRange(obj)
             val = get(obj.hPlots(1),'YLim');
         end
@@ -620,12 +610,12 @@ classdef SpokeModel < most.Model
             obj.validatePropArg('verticalRange',val);
             
             if strcmpi(obj.waveformAmpUnits,'volts');
-                aiRangeMax = obj.sglParamCache.niAiRangeMax;
-                if any(abs(val) > 1.1 * aiRangeMax)
-                    warning('Specified range exceeded input channel voltage range by greater than 10% -- spike amplitude axis limits clamped');
-                    val = min(val,1.1 * aiRangeMax);
-                    val = max(val,-1.1 * aiRangeMax);
-                end
+               aiRangeMax = obj.sglParamCache.niAiRangeMax;
+               if any(abs(val) > 1.1 * aiRangeMax)
+                   warning('Specified range exceeded input channel voltage range by greater than 10% -- spike amplitude axis limits clamped');
+                   val = min(val,1.1 * aiRangeMax);
+                   val = max(val,-1.1 * aiRangeMax);
+               end
             end
             
             set(obj.hPlots,'YLim',val);
@@ -922,10 +912,8 @@ classdef SpokeModel < most.Model
                     case 'volts'
                         aiRangeMax = obj.sglParamCache.niAiRangeMax;
                         obj.thresholdVal = .1 * aiRangeMax;
-                        obj.verticalRange = [-1 1] * aiRangeMax;
                     case 'rmsMultiple'
                         obj.thresholdVal = 5;
-                        obj.verticalRange = [-2*obj.thresholdVal 10*obj.thresholdVal];
                 end
                 
                 %Redraw threshold lines
@@ -968,9 +956,6 @@ classdef SpokeModel < most.Model
         
     end
     
-    
-    
-    
     %% PUBLIC METHODS
     methods
         function start(obj)
@@ -978,9 +963,6 @@ classdef SpokeModel < most.Model
             if obj.running
                 return;
             end
-            
-            %             %Update filename on all start() calls -- handles 1) SpikeGL restart and 2)start & retrigger mode cases
-            %             obj.hSpoke.updateFileName();
             
             %Open SpikeGL connection & updateparameter cache
             obj.hSGL = SpikeGL(obj.sglIPAddress);
@@ -1346,27 +1328,6 @@ classdef SpokeModel < most.Model
                 sampRate = obj.sglParamCache.niSampRate;
                 sampPeriod = 1 / sampRate;
                 
-                
-                %                     %Handle case of filename change - including case of SpikeGL
-                %                     %logging stop/restart, which is detected as filename change (from
-                %                     %empty to prior filename)
-                %                 elseif changedFileName
-                %                     fprintf('fileMaxReadableScanNum: %d obj.lastMaxReadableScanNum: %d\n',fileMaxReadableScanNum, obj.lastMaxReadableScanNum );
-                %
-                %
-                %                     obj.lastMaxReadableScanNum = 0;
-                %                     obj.zprvResetAcquisition(true); %Reset spike data buffer, filter -- leave RMS/mean & reducedData intact
-                %
-                %                     %Recompute RMS if needed
-                %                     if rmsMultipleThresh && obj.baselineStatsRefreshOnRetrigger
-                %                         obj.baselineRMS = zeros(numDispChans,1);
-                %                         obj.baselineMean = zeros(numDispChans,1);
-                %                         obj.baselineRMSLastScan = 0;
-                %
-                %                         rmsMultipleInitializing = true;
-                %                     end
-                %
-                
                 %Handle case of no new data
                 if obj.maxReadableScanNum == obj.lastMaxReadableScanNum %no new data
                     
@@ -1394,30 +1355,6 @@ classdef SpokeModel < most.Model
                 if scansToRead < scansToRead_
                     fprintf(2,'WARNING. A large number of queued-up samples to read detected: %d. If intermittent, this should not cause a problem.\n',scansToRead_ - scansToRead);
                 end
-                
-                
-                %                 if changedFileName
-                %                     obj.priorfileMaxReadableScanNum = obj.maxReadableScanNum;
-                %                 end
-                %
-                %                 obj.maxReadableScanNum = fileMaxReadableScanNum + obj.priorfileMaxReadableScanNum; %Maintain scan number /across/ file-rollover, not worrying about any gap
-                %
-                %                 if obj.maxReadableScanNum <= 0
-                %                     fprintf(2,'WARNING! maxReadableScanNum: %d\n',obj.maxReadableScanNum);
-                %                 end
-                
-                %
-                %
-                %         %Handle case of restarting acquisition
-                %         if obj.restartPending
-                %           obj.restartPending = false;
-                %
-                %           obj.hSpoke.updateFilename(); %Handle possible (likely) change in filename on stop & restart
-                %
-                %           obj.zprvResetAcquisition();
-                %           obj.zprvClearPlots();
-                %         end
-                %
                 
                 %STAGE 1: Read newly available data
                 %[scansToRead, newData] = znstReadAvailableData(obj.maxReadableScanNum-obj.priorfileMaxReadableScanNum-scansToRead,scansToRead); %obj.bufScanNumEnd will be 0 in case of file-rollover or SpikeGL stop/restart
@@ -2727,8 +2664,6 @@ end
 function s = zlclInitPropAttributes()
 
 s.running = struct('Classes','binaryflex','Attributes','scalar');
-
-%s.numAuxChans = struct();
 s.stimStartChannel = struct('Attributes',{{'integer' 'finite' 'nonnegative'}},'AllowEmpty',1);
 
 s.displayMode   = struct('Options',{{'waveform' 'raster'}});
@@ -2738,14 +2673,11 @@ s.thresholdType = struct('Options',{{'volts' 'rmsMultiple'}});
 s.thresholdVal = struct('Attributes',{{'scalar' 'nonempty' 'finite'}});
 s.thresholdAbsolute = struct('Classes','binaryflex','Attributes','scalar');
 s.baselineStatsRefreshPeriod = struct('Attributes',{{'scalar' 'positive' 'finite'}});
-%s.baselineStatsRefreshOnRetrigger = struct('Classes','binaryflex','Attributes','scalar');
 
 s.horizontalRange = struct('Attributes',{{'numel' 2 'finite'}});
-%s.verticalRange = struct('Attributes',{{'finite' '1d'}});
 s.verticalRange = struct('Attributes',{{'numel' 2 'finite'}});
 
 s.waveformAmpUnits = struct('Options',{{'volts' 'rmsMultiple'}});
-
 
 s.waveformsPerPlot = struct('Attributes',{{'scalar' 'finite' 'positive'}});
 s.waveformsPerPlotClearMode = struct('Options',{{'all' 'oldest'}});
