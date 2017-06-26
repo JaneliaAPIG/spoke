@@ -300,8 +300,6 @@ classdef SpokeController < most.Controller;
     
     function stepThresholdVal(obj,direction)
       %Direction: 1 to increment, -1 to decrement
-      
-      
       switch obj.hModel.thresholdType
         case 'volts' %step in millivolts
           if direction == 1
@@ -318,16 +316,8 @@ classdef SpokeController < most.Controller;
           end      
       end
       
-    end
-      
-    
-
-      
-    
-    
-    
-  end
-  
+    end      
+  end  
 end
 
 function s = lclInitPropBindings()
