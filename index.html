@@ -83,7 +83,7 @@
               <li><b>Step 2</b>: Connect the Chronic Headstage to the Whisper box.</li>
               <li><b>Step 3</b>: Start up SpikeGLX</li>
               <ul>
-                  <li><img src="spikeglx.JPG"></li>
+                  <li><figure><img src="spikeglx.JPG"><figcaption>Click on the SpikeGLX executable</figcaption></figure></li>
                   <li><img src="spikeglx_newacq.JPG"></li>
                   <li><img src="config_acq_1.JPG"></li>
                   <li><img src="config_acq_2.JPG"></li>
@@ -109,8 +109,8 @@
               <li><img src="spikeglx_error.JPG"></li>
               <li><img src="spikeglx_error2.JPG"></li>
               <li><img src="spikeglx_nopower.jpg"></li>
-              <li>
-                  Warning: Connection refused (10061) 
+              <li><pre>
+Warning: Connection refused (10061) 
 > In SpikeGL/ChkConn (line 13)
   In SpikeGL (line 34)
   In SpokeModel (line 242)
@@ -133,17 +133,16 @@ hSpoke = SpokeModel(ipAddress);
 
 SpikeGLX is not currently running an acquisition. If SpikeGLX is running on a different host from the one running Matlab/Spoke, then you must specify the IP Address of the host running SpikeGLX when starting spoke:
 
-spoke('192.168.1.10')
+spoke('192.168.1.10')</pre>
               </li>
-              <li>
+              <li><pre>
 WARNING. A large number of queued-up samples to read detected: 1587. If intermittent, this should not cause a problem.
 WARNING. A large number of queued-up samples to read detected: 16312. If intermittent, this should not cause a problem.
 WARNING. A large number of queued-up samples to read detected: 14344. If intermittent, this should not cause a problem.
-WARNING. A large number of queued-up samples to read detected: 14518. If intermittent, this should not cause a problem.
+WARNING. A large number of queued-up samples to read detected: 14518. If intermittent, this should not cause a problem.</pre>
               </li>
               <li>
-                  
-                  
+The Spoke GUI is unresponsive!                  
               </li>
           </ul>
       </section>
