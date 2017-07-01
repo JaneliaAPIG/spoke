@@ -25,7 +25,7 @@
         </ul>
       </header>
       <section>
-          <img alt="A picture of the WHISPER Extracellular Recording System" title="A picture of the WHISPER Extracellular Recording System" src="WHISPERBOX.JPG"><br>
+          <img alt="A picture of the WHISPER Extracellular Recording System" title="A picture of the WHISPER Extracellular Recording System" src="whisperbox.jpg"><br>
           <h3>News</h3>
           <ul>
           <li>
@@ -77,22 +77,39 @@
               </li>
           </ul>
           <h3>Getting Started</h3>
-          <a href="WHISPERTONI.JPG" target="_blank"><img src="WHISPERTONI.JPG"></a>
+          <a href="whispertoni.jpg" target="_blank"><img src="whispertoni.jpg"></a>
           <ul>
               <li><b>Step 1</b>: Connect the Whisper box to your NI Multifunction DAQ via the shielded cable.</li>
               <li><b>Step 2</b>: Connect the Chronic Headstage to the Whisper box.</li>
               <li><b>Step 3</b>: Start up SpikeGLX</li>
-              <ul>
-                  <li><figure><img src="spikeglx.JPG"><figcaption class="captiontext">Click on the SpikeGLX executable</figcaption></figure></li>
-                  <li><figure><img src="spikeglx_newacq.JPG"><figcaption class="captiontext">In the "File" dropdown, select "New Acquisition".</figcaption></figure></li>
-                  <li><figure><img src="config_acq_1.JPG"><figcaption class="captiontext">In the "Devices" tab, click on the "Detect" button. The lower box should list all of your NI devices, including the NI-6366 you have connected to the WHISPER box.</figcaption></figure></li>
-                  <li><figure><img src="config_acq_2.JPG"><figcaption class="captiontext">In the NI Setup tab, you can change the select the muxes assigned to neural channels and analog channels. If you want to operate in Triggered Waveform or Raster mode, you <i>must</i> define MA mux analog channels.</figcaption></figure></li>
-                  <li><figure><img src="config_acq_3.JPG"><figcaption class="captiontext">The Gates tab is typically unused for Spoke.</figcaption></figure></li>
-                  <li><figure><img src="config_acq_4.JPG"><figcaption class="captiontext">The Triggers tab is typically unused for Spoke.</figcaption></figure></li>
-                  <li><figure><img src="config_acq_5.JPG"><figcaption class="captiontext">The See N' Save tab is important. You can perform channel remapping (see SpikeGLX documentation), and you can also define the Channels to Save to disk during an acquisition. Spoke will only see those channels you list in the "IM" section.</figcaption></figure></li>
-              </ul>
+				<figure><img src="spikeglx.jpg"><figcaption class="captiontext">
+				3a. Click on the SpikeGLX executable</figcaption></figure>
+                <figure><img src="spikeglx_newacq.jpg"><figcaption class="captiontext">
+				3b. In the "File" dropdown, select "New Acquisition".</figcaption></figure>
+                <figure><img src="config_acq_1.jpg"><figcaption class="captiontext">
+				3c. In the "Devices" tab, click on the "Detect" button. 
+				The lower box should list all of your NI devices, 
+				including the NI-6366 you have connected to the WHISPER box.</figcaption></figure>
+                <figure><img src="config_acq_2.jpg"><figcaption class="captiontext">
+				3d. In the NI Setup tab, you can change the select the
+				muxes assigned to neural channels and analog channels. 
+				If you want to operate in Triggered Waveform or Raster mode, 
+				you <i>must</i> define MA mux analog channels.</figcaption></figure>
+                <figure><img src="config_acq_3.jpg"><figcaption class="captiontext">
+				3e. The Gates tab is typically unused for Spoke.</figcaption></figure>
+                <figure><img src="config_acq_4.jpg"><figcaption class="captiontext">
+				3f. The Triggers tab is typically unused for Spoke.</figcaption></figure>
+                <figure><img src="config_acq_5.jpg"><figcaption class="captiontext">
+				3g. The See N' Save tab is important. You can perform 
+				channel remapping (see SpikeGLX documentation), and you 
+				can also define the Channels to Save to disk during an 
+				acquisition. Spoke will only see those channels you list 
+				in the "IM" section. <b>Important note: If you are using 
+				triggered modes, you must add the trigger line here.</b></figcaption></figure>
               <li><b>Step 4</b>: Start up Matlab</li>              
-              <li><b>Step 5</b>: Start up Spoke<br><img src="matlab_spoke_start.JPG"></li>
+              <li><b>Step 5</b>: Start up Spoke</li>
+			  <figure><img src="matlab_spoke_start.jpg"><figcaption class="captiontext">
+			  <b>Important: Make sure that the directory that spoke is located in is added to your path!<b></figcaption></figure>
           </ul>          
           <h3>Spoke Controls</h3>
           <ul>
@@ -104,11 +121,13 @@
               <li>Raster Mode (Stimulus Triggered Raster)</li>              
           </ul>
           <h3>Help! Common Errors and How to Deal with Them</h3>
-          <ul>
-              <li><img src="spikeglx_error.JPG"></li>
-              <li><img src="spikeglx_error2.JPG"></li>
-              <li><img src="spikeglx_nopower.jpg"></li>
-              <li><pre>
+		  <ul>
+		  <li>
+			<figure><img src="spikeglx_error.jpg"><figcaption class="captiontext">Solution: </figcaption></figure>
+		  </li>
+			<figure><img src="spikeglx_error2.jpg"><figcaption class="captiontext"></figcaption></figure>
+			<figure><img src="spikeglx_nopower.jpg"><figcaption class="captiontext"></figcaption></figure>
+			<figure><pre>
 Warning: Connection refused (10061) 
 > In SpikeGL/ChkConn (line 13)
   In SpikeGL (line 34)
@@ -133,16 +152,15 @@ hSpoke = SpokeModel(ipAddress);
 SpikeGLX is not currently running an acquisition. If SpikeGLX is running on a different host from the one running Matlab/Spoke, then you must specify the IP Address of the host running SpikeGLX when starting spoke:
 
 spoke('192.168.1.10')</pre>
-              </li>
-              <li><pre>
+<figcaption class="captiontext"></figcaption></figure>
+<figure><pre>
 WARNING. A large number of queued-up samples to read detected: 1587. If intermittent, this should not cause a problem.
 WARNING. A large number of queued-up samples to read detected: 16312. If intermittent, this should not cause a problem.
 WARNING. A large number of queued-up samples to read detected: 14344. If intermittent, this should not cause a problem.
 WARNING. A large number of queued-up samples to read detected: 14518. If intermittent, this should not cause a problem.</pre>
-              </li>
-              <li>
-The Spoke GUI is unresponsive!                  
-              </li>
+<figcaption class="captiontext"></figcaption></figure>
+<figure>The Spoke GUI is unresponsive!                  
+<figcaption class="captiontext"></figcaption></figure>
           </ul>
       </section>
       <footer>
