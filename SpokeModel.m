@@ -401,10 +401,10 @@ classdef SpokeModel < most.Model
                 
             end
             
-            obj.zprvShowDisplayFig();
-            
             obj.displayMode = val;
-            
+
+            obj.zprvShowDisplayFig();
+                       
             %Side-effects
             obj.zprvResetReducedData();
             obj.tabDisplayed = obj.tabDisplayed;
@@ -1163,7 +1163,11 @@ classdef SpokeModel < most.Model
         end
         
         function plotPSTH(obj)
-            assert(strcmpi(obj.displayMode,'raster'),'Plot PSTH operation only available when displayMode=''raster''');
+            if (~strcmpi(obj.displayMode,'raster'))
+                %assert(strcmpi(obj.displayMode,'raster'),'Plot PSTH operation only available when displayMode=''raster''');
+                fprintf(2,'WARNING: Plot PSTH operation only available when displayMode=''raster''\n');
+                return;
+            end
             
             obj.blockTimer = true;
             
