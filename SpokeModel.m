@@ -1578,6 +1578,10 @@ classdef SpokeModel < most.Model
                 %array of (multi-spike) variable-length arrays in
                 %spike-triggered waveform mode
                 
+                if ~isempty(timestampOffsets{1})
+                fprintf('bufStartScanNum: %d, timestampOffsets: %s, delta: %d\n',bufStartScanNum, sprintf('%d ',timestampOffsets{1}),timestampOffsets{1}-bufStartScanNum);
+                end
+                
                 if stimulusTriggeredWaveformMode
                     %once = true;
                     assert(length(timestampOffsets) <= 1, 'Unexpectedly detected more than one stimulus in stimulus triggered waveform mode.');
@@ -2655,12 +2659,12 @@ for h=1:numel(chanSubset)
         %fprintf('currIdx: %d scansToSearch: %d postSpikeNumScans: %d\n',currIdx,scansToSearch,postSpikeNumScans);
         %Find at most one spike (threshold crossing) in the fullDataBuffer
         if thresholdAbsolute %Find crossings above or below absolute threshold level
-            nextSpikeIdx = currIdx + find(diff(abs(fullDataBuffer(currIdx:scansToSearch,i) - baselineMean(i)) > abs(thresholdVal(i))) == 1,1);
+            nextSpikeIdx = currIdx + find(diff(abs(fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) > abs(thresholdVal(i))) == 1,1);
         else
             if thresholdVal >= 0 %Find crossings above threshold level
-                nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,i) - baselineMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
+                nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
             else %Find crossings below threshold level
-                nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,i) - baselineMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
+                nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
             end
         end
         
@@ -2691,7 +2695,7 @@ for h=1:numel(chanSubset)
             %bufStartScanNum. Think of bufStartScanNum as being the offset
             %in "Global Space" that equals zero in the "local space".
             newSpikeScanNums{i}(end+1) = nextSpikeScanNum;
-            localspikes{i}(end+1) = nextSpikeIdx;
+            localspikes{h}(end+1) = nextSpikeIdx;
             %fprintf('bufStartScanNum: %d, nextSpikeScanNum: %d, size of fullDataBuffer: %s \n',bufStartScanNum, nextSpikeScanNum, sprintf('%d ',size(fullDataBuffer)));
             spikesFoundPerChan(i) = spikesFoundPerChan(i) + 1;
             
