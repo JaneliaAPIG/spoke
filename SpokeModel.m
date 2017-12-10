@@ -2658,22 +2658,7 @@ for h=1:numel(chanSubset)
             nextSpikeIdx = currIdx + find(diff(abs(fullDataBuffer(currIdx:scansToSearch,i) - baselineMean(i)) > abs(thresholdVal(i))) == 1,1);
         else
             if thresholdVal >= 0 %Find crossings above threshold level
-                %                 sprintf('%d, %d, %d, %d, %d, %d\n',i, currIdx,scansToSearch,length(baselineMean),length(thresholdVal), length(fullDataBuffer))
-                nextSpikeIdx = currIdx + find( ...
-                                            diff( ...
-                                              (fullDataBuffer(currIdx:scansToSearch,i) - baselineMean(i)) > thresholdVal(i) ...
-                                              ) == 1,1); %Find at most one spike
-
-                if currIdx > 1
-%                   foo = find(diff((fullDataBuffer(currIdx:scansToSearch,i) - baselineMean(i)) > thresholdVal(i)) == 1,1);
-%                   fprintf('thresholdVal: %s\n',sprintf('%d ',thresholdVal));
-%                   fprintf('Foo: %s\n',sprintf('%d ', foo));
-                   %fprintf('scansToSearch: %d, currIdx: %d, nextSpikeIdx: %d, spikesFound: %d, postSpikeNumScans: %d, value at idx: %d \n',scansToSearch, currIdx, nextSpikeIdx, spikesFound, postSpikeNumScans,fullDataBuffer(currIdx));
-                   
-                   % How do we know that the found index is actually the
-                   % correct value?                   
-                end
-
+                nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,i) - baselineMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
             else %Find crossings below threshold level
                 nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,i) - baselineMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
             end
@@ -2719,7 +2704,9 @@ for h=1:numel(chanSubset)
     
     
 end 
+    % *********************************************************************
     % ****************************** DEBUG ********************************
+    % *********************************************************************
     buffersize = size(fullDataBuffer,1); %EDKANG
 
     if ~isempty(localspikes{1})
@@ -2727,11 +2714,13 @@ end
             tempbuffer = zeros(1,buffersize);
             figure(diagramm);
             cla;
-            %boundschecking
+            % *********************************************************************
+            % boundschecking
+            % *********************************************************************
             beginplot = (localspikes{1}(end)-500);
             endplot = (localspikes{1}(end)+500);
             spikelocation = localspikes{1}(end);
-            fprintf('beginplot: %d, endplot: %d, spikeLocation: %d, localspikes: %s \n',beginplot,endplot,spikelocation,sprintf('%d ',localspikes{1}));
+            %fprintf('beginplot: %d, endplot: %d, spikeLocation: %d, localspikes: %s \n',beginplot,endplot,spikelocation,sprintf('%d ',localspikes{1}));
 
             if beginplot < 1
                 beginplot = 1;
@@ -2739,7 +2728,9 @@ end
             if endplot > buffersize
                 endplot = buffersize;
             end
-            %boundschecking
+            % *********************************************************************
+            % boundschecking
+            % *********************************************************************
 
             tempbuffer(beginplot:endplot) = fullDataBuffer(beginplot:endplot,1);
             
@@ -2750,15 +2741,23 @@ end
             hold on;
 
             text(10,4000,sprintf('beginplot: %d',beginplot));
-            text(10,3400,sprintf('endplot: %d',endplot));
-            text(10,2800,sprintf('spikelocation: %d',spikelocation));
+            text(10,3300,sprintf('endplot: %d',endplot));
+            text(10,2600,sprintf('spikelocation: %d',spikelocation));
+            text(10,1900,sprintf('localspikes: %s',sprintf('%d ',localspikes{1})));
             plot(tempbuffer);
             plot(thresholdVal(1)*ones(1,buffersize));
             line([spikelocation spikelocation],get(gca, 'ylim'),'Color','red','LineStyle','--')
             hold off;
         end
     end
+    
+    % So, there is an issue. The cases where the plotted waveforms are not
+    % properly aligned are those when the local space spike location is
+    % low, say less than 100. Why is this happening?
+
+    % *********************************************************************
     % ****************************** DEBUG ********************************    
+    % *********************************************************************
 end
 
 function s = zlclInitPropAttributes()
