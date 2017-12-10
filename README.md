@@ -7,7 +7,7 @@ data from high-channel-count recording systems. It offers multiple experimenter-
 Spoke is developed & maintained by the APIG Lab at HHMI/Janelia Research Campus.
 
 ## Downloads
-Coming soon
+Version 1.0 link coming soon.
 
 ## System Requirements
 
@@ -16,7 +16,7 @@ Coming soon
 * MATLAB R2015b & Signal Processing Toolbox
 
 ## Installation and Getting Started
-[Visit the Spoke User Guide](https://github.com/JaneliaAPIG/spoke/wiki) for Getting Started and other documentation.
+[Visit the Spoke User Guide](http://janeliaapig.github.io/spoke/) for Getting Started and other documentation.
 
 ## Developer API
 [Visit the Wiki](https://github.com/JaneliaAPIG/spoke/wiki) for the Developer API and other technical information.
