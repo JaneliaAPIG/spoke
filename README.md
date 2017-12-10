@@ -16,7 +16,10 @@ Coming soon
 * MATLAB R2015b & Signal Processing Toolbox
 
 ## Installation and Getting Started
-[Visit the Wiki](http://janeliaapig.github.io/spoke/) for Getting Started and other documentation. 
+[Visit the Spoke User Guide](https://github.com/JaneliaAPIG/spoke/wiki) for Getting Started and other documentation.
+
+## Developer API
+[Visit the Wiki](https://github.com/JaneliaAPIG/spoke/wiki) for the Developer API and other technical information.
 
 ## Credits
 * Vijay Iyer: Initial Implementation & Version 1.0
