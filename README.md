@@ -15,11 +15,8 @@ Coming soon
 * SpikeGLX Software ([get it here](http://billkarsh.github.io/SpikeGLX)).
 * MATLAB R2015b & Signal Processing Toolbox
 
-## Installation
-Coming soon
-
-## Getting Started
-[Visit the Wiki](https://github.com/JaneliaAPIG/spoke/wiki) for Getting Started and other documentation. 
+## Installation and Getting Started
+[Visit the Wiki](http://janeliaapig.github.io/spoke/) for Getting Started and other documentation. 
 
 ## Credits
 * Vijay Iyer: Initial Implementation & Version 1.0
