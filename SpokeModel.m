@@ -2630,19 +2630,7 @@ if isscalar(baselineMean)
     baselineMean = repmat(baselineMean,numNeuralChans,1);
 end
 
-% buffersize = size(fullDataBuffer,1);
-% 
-% if max(fullDataBuffer(1:buffersize,1)) > thresholdVal(1)
-%     figure(diagramm);
-%     cla;
-%     ylim manual;
-%     ylim([0,thresholdVal(1)+500]);
-%     hold on;
-%     %threshes = 1600 * ones(buffersize);
-%     plot(fullDataBuffer(1:buffersize,1));
-%     plot(thresholdVal(1)*ones(1,buffersize));
-%     hold off;
-% end
+localspikes = cell(numel(chanSubset),1);
 
 %for i=1:numNeuralChans
 for h=1:numel(chanSubset)
@@ -2662,7 +2650,7 @@ for h=1:numel(chanSubset)
     
     %maxIdx = bufStartScanNum + scansToSearch;
     currIdx = 1; %Index into fullDataBuffer
-    
+        
     while currIdx < scansToSearch
         %fprintf('currIdx: %d scansToSearch: %d postSpikeNumScans: %d\n',currIdx,scansToSearch,postSpikeNumScans);
         %Find at most one spike (threshold crossing) in the fullDataBuffer
@@ -2676,11 +2664,14 @@ for h=1:numel(chanSubset)
                                               (fullDataBuffer(currIdx:scansToSearch,i) - baselineMean(i)) > thresholdVal(i) ...
                                               ) == 1,1); %Find at most one spike
 
-                if currIdx ~= 1
-                   %foo = find(diff((fullDataBuffer(currIdx:scansToSearch,i) - baselineMean(i)) > thresholdVal(i)) == 1,1);
-                   %fprintf('thresholdVal: %s\n',sprintf('%d ',thresholdVal));
-                   %fprintf('Foo: %s\n',sprintf('%d ', foo));
-                   %fprintf('currIdx: %d, nextSpikeIdx: %d, spikesFound: %d, postSpikeNumScans: %d \n',currIdx, nextSpikeIdx, spikesFound, postSpikeNumScans);
+                if currIdx > 1
+%                   foo = find(diff((fullDataBuffer(currIdx:scansToSearch,i) - baselineMean(i)) > thresholdVal(i)) == 1,1);
+%                   fprintf('thresholdVal: %s\n',sprintf('%d ',thresholdVal));
+%                   fprintf('Foo: %s\n',sprintf('%d ', foo));
+                   %fprintf('scansToSearch: %d, currIdx: %d, nextSpikeIdx: %d, spikesFound: %d, postSpikeNumScans: %d, value at idx: %d \n',scansToSearch, currIdx, nextSpikeIdx, spikesFound, postSpikeNumScans,fullDataBuffer(currIdx));
+                   
+                   % How do we know that the found index is actually the
+                   % correct value?                   
                 end
 
             else %Find crossings below threshold level
@@ -2703,8 +2694,22 @@ for h=1:numel(chanSubset)
 
         %Add new spike, if not added already
         if ~ismember(nextSpikeScanNum,recentSpikeScanNums)
+            %Note: fullDataBuffer is in "local" space. This means that it
+            %is zero referenced to the beginning of the current "block" of
+            %samples.
+            %
+            %bufStartScanNum is in spikeglx's "global space". This means
+            %that a bufStartScanNum of 0 is the very beginning of the
+            %spikeglx acquisition.
+            %
+            %This is why nextSpikeScanNum adds the nextSpikeIdx to the
+            %bufStartScanNum. Think of bufStartScanNum as being the offset
+            %in "Global Space" that equals zero in the "local space".
             newSpikeScanNums{i}(end+1) = nextSpikeScanNum;
+            localspikes{i}(end+1) = nextSpikeIdx;
+            %fprintf('bufStartScanNum: %d, nextSpikeScanNum: %d, size of fullDataBuffer: %s \n',bufStartScanNum, nextSpikeScanNum, sprintf('%d ',size(fullDataBuffer)));
             spikesFoundPerChan(i) = spikesFoundPerChan(i) + 1;
+            
         end
 
         %Impose refractory period
@@ -2712,9 +2717,48 @@ for h=1:numel(chanSubset)
 
     end
     
-end
+    
+end 
+    % ****************************** DEBUG ********************************
+    buffersize = size(fullDataBuffer,1); %EDKANG
 
+    if ~isempty(localspikes{1})
+        if max(fullDataBuffer(1:buffersize,1)) > thresholdVal(1)
+            tempbuffer = zeros(1,buffersize);
+            figure(diagramm);
+            cla;
+            %boundschecking
+            beginplot = (localspikes{1}(end)-500);
+            endplot = (localspikes{1}(end)+500);
+            spikelocation = localspikes{1}(end);
+            fprintf('beginplot: %d, endplot: %d, spikeLocation: %d, localspikes: %s \n',beginplot,endplot,spikelocation,sprintf('%d ',localspikes{1}));
 
+            if beginplot < 1
+                beginplot = 1;
+            end
+            if endplot > buffersize
+                endplot = buffersize;
+            end
+            %boundschecking
+
+            tempbuffer(beginplot:endplot) = fullDataBuffer(beginplot:endplot,1);
+            
+            xlim manual;
+            xlim([0 buffersize]);
+            ylim manual;
+            ylim([0,thresholdVal(1)+500]);
+            hold on;
+
+            text(10,4000,sprintf('beginplot: %d',beginplot));
+            text(10,3400,sprintf('endplot: %d',endplot));
+            text(10,2800,sprintf('spikelocation: %d',spikelocation));
+            plot(tempbuffer);
+            plot(thresholdVal(1)*ones(1,buffersize));
+            line([spikelocation spikelocation],get(gca, 'ylim'),'Color','red','LineStyle','--')
+            hold off;
+        end
+    end
+    % ****************************** DEBUG ********************************    
 end
 
 function s = zlclInitPropAttributes()
