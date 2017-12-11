@@ -1394,7 +1394,10 @@ classdef SpokeModel < most.Model
                 end
                 
                 %Housekeeping: Form fullDataBuffer, appending new data
+                
+                %fprintf('size of full data buffer before: %s\n',sprintf('%d ', size(obj.fullDataBuffer)));
                 bufStartScanNum = znstAugmentFullDataBuffer(scansToRead, newData);
+                %fprintf('size of full data buffer after: %s\n',sprintf('%d ', size(obj.fullDataBuffer)));
                 
                 %Not sure what actual edge case this checks for. Let's warn
                 %instead of returning preemptively (which causes a
@@ -1499,6 +1502,7 @@ classdef SpokeModel < most.Model
                         obj.fullDataBuffer(1:end-max(1,obj.stimEventClassifyNumScans)+1,:) = [];
                     else
                         %Waveform mode: leave only one full horizontalRange (pre+post+1 sample) at the end
+                       % fprintf('obj.horizontalRangeScans: %s\n',sprintf('%d ', obj.horizontalRangeScans));
                         obj.fullDataBuffer(1:end-(diff(obj.horizontalRangeScans)+1),:) = [];
                     end
                 catch ME
@@ -1648,6 +1652,8 @@ classdef SpokeModel < most.Model
                 function znstStoreReducedData_Waveforms()
                     idxWindowMin = scanWindowRelative + timestampOffsets_(1) - bufStartScanNum;
                     idxWindowMax = scanWindowRelative + timestampOffsets_(numNewTimestamps) - bufStartScanNum;
+                    
+                    %size(obj.fullDataBuffer)
                     
                     % ****************************** DEBUG *****************************
                     if h==1
@@ -2020,6 +2026,7 @@ classdef SpokeModel < most.Model
                                      obj.refreshPeriodMaxNumWaveforms, ...
                                      obj.sglChanSubset, ...
                                      obj.neuralChanAcqList, ...
+                                     obj.horizontalRangeScans, ...
                                      obj.diagramm); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
                 
                 %             if maxNumWaveformsApplied && ~obj.maxNumWaveformsApplied
@@ -2041,6 +2048,7 @@ classdef SpokeModel < most.Model
                                                     obj.refreshPeriodMaxNumWaveforms, ...
                                                     obj.sglChanSubset, ...
                                                     obj.neuralChanAcqList, ...
+                                                    obj.horizontalRangeScans, ...
                                                     obj.diagramm); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
             end
             
@@ -2662,7 +2670,7 @@ end
 
 
 %% LOCAL FUNCTIONS
-function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedData,fullDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,baselineMean,maxNumSpikes,sglChanSubset,chanSubset, diagramm)
+function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedData,fullDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,baselineMean,maxNumSpikes,sglChanSubset,chanSubset, horizontalRangeScans, diagramm)
 %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
 %
 % reducedData: Cell array, one element per channel, containing data for each detected spike (from earlier timer callback period(s))
@@ -2673,6 +2681,8 @@ function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedDa
 % thresholdAbsolute: Logical. If true, both crossings above thresholdVal or below -thresholdVal are considered spikes.
 % baselineMean: Mean value to subtract from data before detecting threshold crossings.
 % maxNumSpikes: Scalar, indicating max number of spikes to detect per channel (from the start of the fullDataBuffer)
+% chanSubset: The defined channel subset, which is specified by the user in spikeGLX. This is used to account for situations where the user-defined channels are a subset of the total number of channels.
+% horizontalRangeScans: The negative and positive offsets that define the horizontal range of the display in samples.
 %
 % NOTES:
 %  VI050812: Not clear that recentSpikeScanNums can ever be non-empty -- might be able to get rid of this logic (and reducedData argument) altogether?
@@ -2709,7 +2719,16 @@ for h=1:numel(chanSubset)
     scansToSearch = size(fullDataBuffer,1) - postSpikeNumScans;
     
     %maxIdx = bufStartScanNum + scansToSearch;
-    currIdx = 1; %Index into fullDataBuffer
+    %Since the fullDatabuffer contains historic data, start detection at
+    %the first point at which a theoretical spike at the beginning of the
+    %detection window would have a full negative horizontal range's worth
+    %of data. If this value is too small, then there won't be any data in a
+    %portion of the user's display.
+    
+    currIdx = abs(horizontalRangeScans(1)); %Index into fullDataBuffer. 
+    % NOTE: If currIdx is initialized to 1, it will begin spike detection at the very start of the fullDataBuffer.
+    % Doing because it will detect as many spikes as possible. The downside is that it may detect a spike with no 
+    % waveform data in the native part of the time window.
         
     while currIdx < scansToSearch
         %fprintf('currIdx: %d scansToSearch: %d postSpikeNumScans: %d\n',currIdx,scansToSearch,postSpikeNumScans);
