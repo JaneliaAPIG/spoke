@@ -7,9 +7,6 @@ classdef SpokeModel < most.Model
     
     %% PUBLIC PROPERTIES
     properties (SetObservable)
-        diagramm; %Temporary figure for debugging.
-        diagrammm; %Temporary figure 2 for debugging.
-        
         refreshRate = 5; %Refresh rate, in Hz, at which data is reviewed and newly detected spikes are plotted
         
         thresholdType = 'rmsMultiple'; %One of {'volts' 'rmsMultiple'}. If rmsMultiple is specified, it is assumed that signals' DC is already filtered.
@@ -187,6 +184,11 @@ classdef SpokeModel < most.Model
         partialWaveformBuffer = {}; % Buffer that holds part of a waveform from prior processing period. Used when waveformWrap is true.
         
         verticalRangeCache; % A struct used to persist the last value used for verticalRange in each mode.
+
+        % Debug related properties.
+        diagramm; %Temporary figure for debugging.
+        diagrammm; %Temporary figure 2 for debugging.
+        debug = false; % Set to true to enable debugging.
     end
     
     properties (Hidden, SetAccess=immutable)
@@ -244,7 +246,6 @@ classdef SpokeModel < most.Model
             obj.hSGL = SpikeGL(sglIPAddress);
             
             obj.sglParamCache = GetParams(obj.hSGL); %initialize SpikeGL param cache
-            
             
             %Create class-data file
             s.lastConfigFileName = '';
@@ -966,8 +967,10 @@ classdef SpokeModel < most.Model
                 return;
             end
             
-            obj.diagramm = figure('name','temporary plot');
-            obj.diagrammm = figure('name','temporary plot 2');
+            if obj.debug
+                obj.diagramm = figure('name','temporary plot');
+                obj.diagrammm = figure('name','temporary plot 2');
+            end
             
             %Open SpikeGL connection & updateparameter cache
             obj.hSGL = SpikeGL(obj.sglIPAddress);
@@ -1293,9 +1296,6 @@ classdef SpokeModel < most.Model
         end
     end
     
-    
-    
-    
     %% HIDDEN METHODS
     methods (Hidden)
         
@@ -1584,12 +1584,13 @@ classdef SpokeModel < most.Model
                 %array of (multi-spike) variable-length arrays in
                 %spike-triggered waveform mode
                 
-                if ~isempty(timestampOffsets{1})
-                fprintf('bufStartScanNum: %d, timestampOffsets: %s, delta: %d\n',bufStartScanNum, sprintf('%d ',timestampOffsets{1}),timestampOffsets{1}-bufStartScanNum);
+                if obj.debug && ~isempty(timestampOffsets{1})
+                    % ******************* DEBUG ********************
+                    fprintf('bufStartScanNum: %d, timestampOffsets: %s, delta: %d\n',bufStartScanNum, sprintf('%d ',timestampOffsets{1}),timestampOffsets{1}-bufStartScanNum);
+                    % ******************* DEBUG ********************
                 end
                 
                 if stimulusTriggeredWaveformMode
-                    %once = true;
                     assert(length(timestampOffsets) <= 1, 'Unexpectedly detected more than one stimulus in stimulus triggered waveform mode.');
                 else
                     if isempty(timestampOffsets)
@@ -1655,16 +1656,16 @@ classdef SpokeModel < most.Model
                     
                     %size(obj.fullDataBuffer)
                     
-                    % ****************************** DEBUG *****************************
-                    if h==1
+                    if obj.debug && h==1 % Limit debug to channel 1 to keep things simple.
+                        % ****************************** DEBUG *****************************
                         fprintf('\nscanNums: %d, numNewTimestamps: %d\n', obj.reducedData{i}.scanNums, numNewTimestamps);
                         fprintf('timestampOffsets: %s\n',sprintf('%d ',timestampOffsets_));
                         fprintf('scanWindowRelative: %s\n',sprintf('%d ',scanWindowRelative));
                         fprintf('idxWindowMin: %s\n',sprintf('%d ',idxWindowMin));
                         fprintf('idxWindowMax: %s\n',sprintf('%d ',idxWindowMax));
                         fprintf('\n************************************************************************\n');
+                        % ****************************** DEBUG *****************************
                     end
-                    % ****************************** DEBUG *****************************
                     
                     for j=1:numNewTimestamps
                         if stimulusTriggeredWaveformMode
@@ -1674,38 +1675,34 @@ classdef SpokeModel < most.Model
                         end
                         
                         idxWindow = scanWindow - bufStartScanNum;
-
-                        % ****************************** DEBUG *****************************
-                        if h==1
-                           fprintf('j: %d, idxWindow: %s\n',j,sprintf('%d ',idxWindow));
-                           fprintf('j: %d, idxWindow < 1: %s\n',j,sprintf('%d ',idxWindow < 1));
-                           fprintf('j: %d, idxWindow >= 1: %s\n',j,sprintf('%d ',idxWindow >= 1));
+                        
+                        if obj.debug && h==1
+                            % ****************************** DEBUG *****************************
+                            fprintf('j: %d, idxWindow: %s\n',j,sprintf('%d ',idxWindow));
+                            fprintf('j: %d, idxWindow < 1: %s\n',j,sprintf('%d ',idxWindow < 1));
+                            fprintf('j: %d, idxWindow >= 1: %s\n',j,sprintf('%d ',idxWindow >= 1));
+                            % ****************************** DEBUG *****************************
                         end
-                        % ****************************** DEBUG *****************************
-                    
+                        
                         %Store waveform(s) for this channel, checking for edge cases
                         if find(idxWindow < 1) %'early' waveform in first timer chunk upon start of Spoke execution, before there is any history from prior chunks
-                           tmpWindow = idxWindow + 1000 + abs(scanWindowRelative(1));
-                           
-                           offset = find(~idxWindow); % Find the offset in the waveform of the first non-negative value. This is the true "trigger level" crossing location. Don't lose this.
-                           waveform = zeros(length(tmpWindow),1,'int16');
-                           % Note: The following operations used to assume
-                           % that the zero value in idxwindow/tmpwindow was
-                           % the "trigger level" crossing. In actuality,
-                           % this is relative to the relative scan window.
-                           % So what we needed to do was renormalize the
-                           % idxWindow to the relative scan window. Then we
-                           waveform(tmpWindow < 1) = obj.fullDataBuffer(1,h); % Pad the waveform to the left of the zero crossing with whatever the first value in the waveform is.
-                           waveform(tmpWindow >= 1) = obj.fullDataBuffer(tmpWindow >= 1,h); % Fill in the waveform to the right of the zero crossing with the actual waveform.
-                           newwaveform = vertcat(zeros(offset,1),waveform); % Now, center the waveform on the original "trigger level" crossing index.
-                           obj.reducedData{i}.waveforms{j} = newwaveform(1:length(tmpWindow));
-
-                            % ****************************** DEBUG *****************************
-                            % *************************************************************************
-                            % *************************************************************************
-                            % *************************************************************************
-
-                            if  h == 1
+                            tmpWindow = idxWindow + 1000 + abs(scanWindowRelative(1));
+                            
+                            offset = find(~idxWindow); % Find the offset in the waveform of the first non-negative value. This is the true "trigger level" crossing location. Don't lose this.
+                            waveform = zeros(length(tmpWindow),1,'int16');
+                            % Note: The following operations used to assume
+                            % that the zero value in idxwindow/tmpwindow was
+                            % the "trigger level" crossing. In actuality,
+                            % this is relative to the relative scan window.
+                            % So what we needed to do was renormalize the
+                            % idxWindow to the relative scan window. Then we
+                            waveform(tmpWindow < 1) = obj.fullDataBuffer(1,h); % Pad the waveform to the left of the zero crossing with whatever the first value in the waveform is.
+                            waveform(tmpWindow >= 1) = obj.fullDataBuffer(tmpWindow >= 1,h); % Fill in the waveform to the right of the zero crossing with the actual waveform.
+                            newwaveform = vertcat(zeros(offset,1),waveform); % Now, center the waveform on the original "trigger level" crossing index.
+                            obj.reducedData{i}.waveforms{j} = newwaveform(1:length(tmpWindow));
+                            
+                            if obj.debug &&  h == 1
+                                % ********************************** DEBUG ********************************
                                 fprintf('j: %d, tmpWindow: %s\n',j,sprintf('%d ',tmpWindow));
                                 fprintf('j: %d, waveform: %s\n',j,sprintf('%d ',waveform));
                                 figure(obj.diagrammm);
@@ -1715,46 +1712,33 @@ classdef SpokeModel < most.Model
                                 ylim manual;
                                 ylim([0, 17000]);
                                 hold on;
-
+                                
                                 plot(waveform);
                                 hold off;
+                                % ********************************** DEBUG ********************************
                             end
-
-                            % *************************************************************************
-                            % *************************************************************************
-                            % *************************************************************************
-                            % ****************************** DEBUG *****************************
                         elseif (idxWindowMax(end) > size(obj.fullDataBuffer,1)) %'late' waveform at end of a timer chunk, extending beyond available data
                             if stimulusTriggeredWaveformMode
-                                if h==1
+                                if h==1 % EKK - Revisit this condition. Why does the first channel require different processing?
                                     obj.partialWaveformBuffer{end+1,i} = obj.fullDataBuffer(idxWindowMin(1):end,h);
                                     newWaveformWrapVal = idxWindowMax(end) - size(obj.fullDataBuffer,1); %TODO CHECK FOR +1 NECESSARY?
                                 else
                                     obj.partialWaveformBuffer{end,i} = obj.fullDataBuffer(idxWindowMin(1):end,h);
                                 end
                             else
-                                %Warn if a 'late' waveform arises in spike-triggered waveform mode                                                                
+                                %Warn the user if a 'late' waveform arises in spike-triggered waveform mode
                                 fprintf('waveform #%d out of bounds, channel #%d, idxWindow min(1): %d, idxWindow min(end): %d, idxWindow max(1): %d, idxWindow max(end): %d\n', ...
                                     j, i, idxWindowMin(1), idxWindowMin(end), idxWindowMax(1), idxWindowMin(end) );
                                 
-                                %TODO:Determine if this can actually
-                                %happen; if the
-                                %partialWaveformBuffer/waveformWrap
-                                %mechanism is needed/useful in
-                                %spike-triggered waveform mode; and/or if
-                                %the contract/augment buffer mechanism
-                                %supercedes or is superceded by the
-                                %partialWaveformBuffer/waveformWrap
-                                %potential mechanism
-                                
+                                %TODO:Determine if this can actually happen; if the partialWaveformBuffer/waveformWrap
+                                %mechanism is needed/useful in spike-triggered waveform mode; and/or if the contract/augment buffer mechanism
+                                %supercedes or is superceded by the partialWaveformBuffer/waveformWrap potential mechanism
                             end
                         else
                             obj.reducedData{i}.waveforms{j} = obj.fullDataBuffer(idxWindow,h);
                         end
-                        
                     end
                 end
-                
             end
             
             function znstDetectStimulus(bufStartScanNum)
@@ -2027,6 +2011,7 @@ classdef SpokeModel < most.Model
                                      obj.sglChanSubset, ...
                                      obj.neuralChanAcqList, ...
                                      obj.horizontalRangeScans, ...
+                                     obj.debug, ...
                                      obj.diagramm); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
                 
                 %             if maxNumWaveformsApplied && ~obj.maxNumWaveformsApplied
@@ -2049,6 +2034,7 @@ classdef SpokeModel < most.Model
                                                     obj.sglChanSubset, ...
                                                     obj.neuralChanAcqList, ...
                                                     obj.horizontalRangeScans, ...
+                                                    obj.debug, ...
                                                     obj.diagramm); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
             end
             
@@ -2670,7 +2656,7 @@ end
 
 
 %% LOCAL FUNCTIONS
-function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedData,fullDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,baselineMean,maxNumSpikes,sglChanSubset,chanSubset, horizontalRangeScans, diagramm)
+function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedData,fullDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,baselineMean,maxNumSpikes,sglChanSubset,chanSubset, horizontalRangeScans, debug, diagramm)
 %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
 %
 % reducedData: Cell array, one element per channel, containing data for each detected spike (from earlier timer callback period(s))
@@ -2683,6 +2669,7 @@ function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedDa
 % maxNumSpikes: Scalar, indicating max number of spikes to detect per channel (from the start of the fullDataBuffer)
 % chanSubset: The defined channel subset, which is specified by the user in spikeGLX. This is used to account for situations where the user-defined channels are a subset of the total number of channels.
 % horizontalRangeScans: The negative and positive offsets that define the horizontal range of the display in samples.
+% debug: set to true if debugging is activated. This should be equal to obj.debug.
 %
 % NOTES:
 %  VI050812: Not clear that recentSpikeScanNums can ever be non-empty -- might be able to get rid of this logic (and reducedData argument) altogether?
@@ -2780,60 +2767,55 @@ for h=1:numel(chanSubset)
         currIdx = nextSpikeIdx + postSpikeNumScans; %Will start with final scan of the post-spike-window...to use as first scan for next diff operation (first element never selected)
 
     end
-    
-    
 end 
-    % *********************************************************************
-    % ****************************** DEBUG ********************************
-    % *********************************************************************
-    buffersize = size(fullDataBuffer,1); %EDKANG
+    if debug
+        % *********************************************************************
+        % ****************************** DEBUG ********************************
+        % *********************************************************************
+        buffersize = size(fullDataBuffer,1);
 
-    if ~isempty(localspikes{1})
-        if max(fullDataBuffer(1:buffersize,1)) > thresholdVal(1)
-            tempbuffer = zeros(1,buffersize);
-            figure(diagramm);
-            cla;
-            % *********************************************************************
-            % boundschecking
-            % *********************************************************************
-            beginplot = (localspikes{1}(end)-500);
-            endplot = (localspikes{1}(end)+500);
-            spikelocation = localspikes{1}(end);
-            %fprintf('beginplot: %d, endplot: %d, spikeLocation: %d, localspikes: %s \n',beginplot,endplot,spikelocation,sprintf('%d ',localspikes{1}));
+        if ~isempty(localspikes{1})
+            if max(fullDataBuffer(1:buffersize,1)) > thresholdVal(1)
+                tempbuffer = zeros(1,buffersize);
+                figure(diagramm);
+                cla;
+                % *********************************************************************
+                % boundschecking
+                % *********************************************************************
+                beginplot = (localspikes{1}(end)-500);
+                endplot = (localspikes{1}(end)+500);
+                spikelocation = localspikes{1}(end);
+                %fprintf('beginplot: %d, endplot: %d, spikeLocation: %d, localspikes: %s \n',beginplot,endplot,spikelocation,sprintf('%d ',localspikes{1}));
 
-            if beginplot < 1
-                beginplot = 1;
+                if beginplot < 1
+                    beginplot = 1;
+                end
+                if endplot > buffersize
+                    endplot = buffersize;
+                end
+                % *********************************************************************
+                % boundschecking
+                % *********************************************************************
+
+                tempbuffer(beginplot:endplot) = fullDataBuffer(beginplot:endplot,1);
+
+                xlim manual;
+                xlim([0 buffersize]);
+                ylim manual;
+                ylim([0,thresholdVal(1)+500]);
+                hold on;
+
+                text(10,4000,sprintf('beginplot: %d',beginplot));
+                text(10,3300,sprintf('endplot: %d',endplot));
+                text(10,2600,sprintf('spikelocation: %d',spikelocation));
+                text(10,1900,sprintf('localspikes: %s',sprintf('%d ',localspikes{1})));
+                plot(tempbuffer);
+                plot(thresholdVal(1)*ones(1,buffersize));
+                line([spikelocation spikelocation],get(gca, 'ylim'),'Color','red','LineStyle','--')
+                hold off;
             end
-            if endplot > buffersize
-                endplot = buffersize;
-            end
-            % *********************************************************************
-            % boundschecking
-            % *********************************************************************
-
-            tempbuffer(beginplot:endplot) = fullDataBuffer(beginplot:endplot,1);
-            
-            xlim manual;
-            xlim([0 buffersize]);
-            ylim manual;
-            ylim([0,thresholdVal(1)+500]);
-            hold on;
-
-            text(10,4000,sprintf('beginplot: %d',beginplot));
-            text(10,3300,sprintf('endplot: %d',endplot));
-            text(10,2600,sprintf('spikelocation: %d',spikelocation));
-            text(10,1900,sprintf('localspikes: %s',sprintf('%d ',localspikes{1})));
-            plot(tempbuffer);
-            plot(thresholdVal(1)*ones(1,buffersize));
-            line([spikelocation spikelocation],get(gca, 'ylim'),'Color','red','LineStyle','--')
-            hold off;
-        end
+        end    
     end
-    
-    % So, there is an issue. The cases where the plotted waveforms are not
-    % properly aligned are those when the local space spike location is
-    % low, say less than 100. Why is this happening?
-
     % *********************************************************************
     % ****************************** DEBUG ********************************    
     % *********************************************************************
