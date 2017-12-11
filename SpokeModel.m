@@ -1649,6 +1649,7 @@ classdef SpokeModel < most.Model
                     idxWindowMin = scanWindowRelative + timestampOffsets_(1) - bufStartScanNum;
                     idxWindowMax = scanWindowRelative + timestampOffsets_(numNewTimestamps) - bufStartScanNum;
                     
+                    % ****************************** DEBUG *****************************
                     if h==1
                         fprintf('\nscanNums: %d, numNewTimestamps: %d\n', obj.reducedData{i}.scanNums, numNewTimestamps);
                         fprintf('timestampOffsets: %s\n',sprintf('%d ',timestampOffsets_));
@@ -1657,6 +1658,7 @@ classdef SpokeModel < most.Model
                         fprintf('idxWindowMax: %s\n',sprintf('%d ',idxWindowMax));
                         fprintf('\n************************************************************************\n');
                     end
+                    % ****************************** DEBUG *****************************
                     
                     for j=1:numNewTimestamps
                         if stimulusTriggeredWaveformMode
@@ -1667,24 +1669,32 @@ classdef SpokeModel < most.Model
                         
                         idxWindow = scanWindow - bufStartScanNum;
 
+                        % ****************************** DEBUG *****************************
                         if h==1
                            fprintf('j: %d, idxWindow: %s\n',j,sprintf('%d ',idxWindow));
                            fprintf('j: %d, idxWindow < 1: %s\n',j,sprintf('%d ',idxWindow < 1));
                            fprintf('j: %d, idxWindow >= 1: %s\n',j,sprintf('%d ',idxWindow >= 1));
                         end
+                        % ****************************** DEBUG *****************************
                     
                         %Store waveform(s) for this channel, checking for edge cases
                         if find(idxWindow < 1) %'early' waveform in first timer chunk upon start of Spoke execution, before there is any history from prior chunks
-                           tmpWindow = idxWindow + 100; %WTF do I need this to work?
+                           tmpWindow = idxWindow + 1000 + abs(scanWindowRelative(1));
                            
-                           offset = find(~idxWindow);
-                           
+                           offset = find(~idxWindow); % Find the offset in the waveform of the first non-negative value. This is the true "trigger level" crossing location. Don't lose this.
                            waveform = zeros(length(tmpWindow),1,'int16');
-                           waveform(tmpWindow < 1) = obj.fullDataBuffer(1,h);
-                           waveform(tmpWindow >= 1) = obj.fullDataBuffer(tmpWindow >= 1,h);
-                           newwaveform = vertcat(zeros(offset,1),waveform);
+                           % Note: The following operations used to assume
+                           % that the zero value in idxwindow/tmpwindow was
+                           % the "trigger level" crossing. In actuality,
+                           % this is relative to the relative scan window.
+                           % So what we needed to do was renormalize the
+                           % idxWindow to the relative scan window. Then we
+                           waveform(tmpWindow < 1) = obj.fullDataBuffer(1,h); % Pad the waveform to the left of the zero crossing with whatever the first value in the waveform is.
+                           waveform(tmpWindow >= 1) = obj.fullDataBuffer(tmpWindow >= 1,h); % Fill in the waveform to the right of the zero crossing with the actual waveform.
+                           newwaveform = vertcat(zeros(offset,1),waveform); % Now, center the waveform on the original "trigger level" crossing index.
                            obj.reducedData{i}.waveforms{j} = newwaveform(1:length(tmpWindow));
 
+                            % ****************************** DEBUG *****************************
                             % *************************************************************************
                             % *************************************************************************
                             % *************************************************************************
@@ -1701,17 +1711,13 @@ classdef SpokeModel < most.Model
                                 hold on;
 
                                 plot(waveform);
-            %                    line([spikelocation spikelocation],get(gca, 'ylim'),'Color','red','LineStyle','--')
                                 hold off;
                             end
 
                             % *************************************************************************
                             % *************************************************************************
                             % *************************************************************************
-%                            waveform = zeros(length(idxWindow),1,'int16');
-%                            waveform(idxWindow < 1) = obj.fullDataBuffer(1,h);
-%                            waveform(idxWindow >= 1) = obj.fullDataBuffer(idxWindow >= 1,h);
-%                            obj.reducedData{i}.waveforms{j} = waveform;
+                            % ****************************** DEBUG *****************************
                         elseif (idxWindowMax(end) > size(obj.fullDataBuffer,1)) %'late' waveform at end of a timer chunk, extending beyond available data
                             if stimulusTriggeredWaveformMode
                                 if h==1
