@@ -8,6 +8,7 @@ classdef SpokeModel < most.Model
     %% PUBLIC PROPERTIES
     properties (SetObservable)
         diagramm; %Temporary figure for debugging.
+        diagrammm; %Temporary figure 2 for debugging.
         
         refreshRate = 5; %Refresh rate, in Hz, at which data is reviewed and newly detected spikes are plotted
         
@@ -966,6 +967,7 @@ classdef SpokeModel < most.Model
             end
             
             obj.diagramm = figure('name','temporary plot');
+            obj.diagrammm = figure('name','temporary plot 2');
             
             %Open SpikeGL connection & updateparameter cache
             obj.hSGL = SpikeGL(obj.sglIPAddress);
@@ -1647,6 +1649,15 @@ classdef SpokeModel < most.Model
                     idxWindowMin = scanWindowRelative + timestampOffsets_(1) - bufStartScanNum;
                     idxWindowMax = scanWindowRelative + timestampOffsets_(numNewTimestamps) - bufStartScanNum;
                     
+                    if h==1
+                        fprintf('\nscanNums: %d, numNewTimestamps: %d\n', obj.reducedData{i}.scanNums, numNewTimestamps);
+                        fprintf('timestampOffsets: %s\n',sprintf('%d ',timestampOffsets_));
+                        fprintf('scanWindowRelative: %s\n',sprintf('%d ',scanWindowRelative));
+                        fprintf('idxWindowMin: %s\n',sprintf('%d ',idxWindowMin));
+                        fprintf('idxWindowMax: %s\n',sprintf('%d ',idxWindowMax));
+                        fprintf('\n************************************************************************\n');
+                    end
+                    
                     for j=1:numNewTimestamps
                         if stimulusTriggeredWaveformMode
                             scanWindow = scanWindowRelative + timestampOffsets_;
@@ -1655,13 +1666,52 @@ classdef SpokeModel < most.Model
                         end
                         
                         idxWindow = scanWindow - bufStartScanNum;
-                        
+
+                        if h==1
+                           fprintf('j: %d, idxWindow: %s\n',j,sprintf('%d ',idxWindow));
+                           fprintf('j: %d, idxWindow < 1: %s\n',j,sprintf('%d ',idxWindow < 1));
+                           fprintf('j: %d, idxWindow >= 1: %s\n',j,sprintf('%d ',idxWindow >= 1));
+                        end
+                    
                         %Store waveform(s) for this channel, checking for edge cases
                         if find(idxWindow < 1) %'early' waveform in first timer chunk upon start of Spoke execution, before there is any history from prior chunks
-                            waveform = zeros(length(idxWindow),1,'int16');
-                            waveform(idxWindow < 1) = obj.fullDataBuffer(1,h);
-                            waveform(idxWindow >= 1) = obj.fullDataBuffer(idxWindow >= 1,h);
-                            obj.reducedData{i}.waveforms{j} = waveform;
+                           tmpWindow = idxWindow + 100; %WTF do I need this to work?
+                           
+                           offset = find(~idxWindow);
+                           
+                           waveform = zeros(length(tmpWindow),1,'int16');
+                           waveform(tmpWindow < 1) = obj.fullDataBuffer(1,h);
+                           waveform(tmpWindow >= 1) = obj.fullDataBuffer(tmpWindow >= 1,h);
+                           newwaveform = vertcat(zeros(offset,1),waveform);
+                           obj.reducedData{i}.waveforms{j} = newwaveform(1:length(tmpWindow));
+
+                            % *************************************************************************
+                            % *************************************************************************
+                            % *************************************************************************
+
+                            if  h == 1
+                                fprintf('j: %d, tmpWindow: %s\n',j,sprintf('%d ',tmpWindow));
+                                fprintf('j: %d, waveform: %s\n',j,sprintf('%d ',waveform));
+                                figure(obj.diagrammm);
+                                cla;
+                                xlim manual;
+                                xlim([0 600]);
+                                ylim manual;
+                                ylim([0, 17000]);
+                                hold on;
+
+                                plot(waveform);
+            %                    line([spikelocation spikelocation],get(gca, 'ylim'),'Color','red','LineStyle','--')
+                                hold off;
+                            end
+
+                            % *************************************************************************
+                            % *************************************************************************
+                            % *************************************************************************
+%                            waveform = zeros(length(idxWindow),1,'int16');
+%                            waveform(idxWindow < 1) = obj.fullDataBuffer(1,h);
+%                            waveform(idxWindow >= 1) = obj.fullDataBuffer(idxWindow >= 1,h);
+%                            obj.reducedData{i}.waveforms{j} = waveform;
                         elseif (idxWindowMax(end) > size(obj.fullDataBuffer,1)) %'late' waveform at end of a timer chunk, extending beyond available data
                             if stimulusTriggeredWaveformMode
                                 if h==1
@@ -2212,7 +2262,7 @@ classdef SpokeModel < most.Model
                 if isempty(waveform)
                     return;
                 end
-                assert(length(waveform) == length(xData),'Waveform data for chan %d (%d), spike %d not of expected length (%d)\n',i,length(waveform),j,length(xData));
+                assert(length(waveform) == length(xData),'Waveform data for chan %d (%d), spike %d not of expected length (%d)\n',i,length(waveform),j,length(xData));             
                 
                 %Scale waveform from A/D units to target units, applying mean subtraction if thresholdType='rmsMultiple'
                 switch obj.waveformAmpUnits
