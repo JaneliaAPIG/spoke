@@ -7,7 +7,7 @@ data from high-channel-count recording systems. It offers multiple experimenter-
 Spoke is developed & maintained by the APIG Lab at HHMI/Janelia Research Campus.
 
 ## Downloads
-Coming soon
+Version 1.0 link coming soon.
 
 ## System Requirements
 
@@ -15,11 +15,11 @@ Coming soon
 * SpikeGLX Software ([get it here](http://billkarsh.github.io/SpikeGLX)).
 * MATLAB R2015b & Signal Processing Toolbox
 
-## Installation
-Coming soon
+## Installation and Getting Started
+[Visit the Spoke User Guide](http://janeliaapig.github.io/spoke/) for Getting Started and other documentation.
 
-## Getting Started
-[Visit the Wiki](https://github.com/JaneliaAPIG/spoke/wiki) for Getting Started and other documentation. 
+## Developer API
+[Visit the Wiki](https://github.com/JaneliaAPIG/spoke/wiki) for the Developer API and other technical information.
 
 ## Credits
 * Vijay Iyer: Initial Implementation & Version 1.0
