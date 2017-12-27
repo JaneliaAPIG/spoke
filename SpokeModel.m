@@ -111,6 +111,7 @@ classdef SpokeModel < most.Model
         hFigs; %Struct of handles to grid figure
         hPanels; %Struct of handles to subpanels in grid figure, one for each channel per tab
         hChanLabels; %Struct of arrays of text labels, identifying each channel
+        hButtons; %Struct of handles to buttons on the waveform and raster grids.
         
         %Handle graphics specific to waveform display
         hPlots; %Array of axes handles, one for each axes in grid
@@ -343,6 +344,25 @@ classdef SpokeModel < most.Model
             
             set([obj.hFigs.waveform obj.hFigs.raster obj.hFigs.psth],'Units','normalized');
             
+            %Add pushbuttons to the waveform and raster grids.
+            obj.hButtons.toolbar = uitoolbar(obj.hFigs.waveform);
+            % Read an image
+            [img,map] = imread(fullfile(matlabroot, 'toolbox','matlab','icons','matlabicon.gif'));
+
+            % Convert image from indexed to truecolor
+            icon = ind2rgb(img,map);
+
+            obj.hButtons.screenshot = uipushtool(obj.hButtons.toolbar,'TooltipString','Click to Save a Screenshot',...
+                 'ClickedCallback',...
+                 'hGrid.zprvSnapshot');
+            obj.hButtons.pause =  uipushtool(obj.hButtons.toolbar,'TooltipString','Click to Pause or Unpause Operation',...
+                 'ClickedCallback',...
+                 'hGrid.zprvPause');
+
+             % Set the button icon
+            obj.hButtons.screenshot.CData = icon;
+            obj.hButtons.pause.CData = icon;
+             
             %TODO: Use gobjects
             for i=1:numPlots
                 
@@ -2441,8 +2461,6 @@ classdef SpokeModel < most.Model
         end
         
         function zprvResetStimNumsPlotted(obj)
-            
-            
             obj.stimNumsPlotted = struct(); %Clears existing struct data
             
             nca = numel(obj.neuralChansAvailable);
@@ -2638,9 +2656,24 @@ classdef SpokeModel < most.Model
                     obj.hRasterLines{i}(j) = animatedline('Parent',obj.hRasters(j),'LineStyle','none','Marker','d','MarkerSize',2,'LineStyle','none','Color',colorOrder(i,:));
                 end
             end
+        end
+
+        function zprvSnapshot(obj)
+            numPlots = obj.PLOTS_PER_TAB;
+            
+            for i=1:numPlots
+                %Iterate through the plots and save to disk.
+                %obj.hPlots(i) = axes('Parent',obj.hPanels.waveform(i),'Position',[0 0 1 1],'XLim',obj.horizontalRange); %,'YLim',obj.verticalRange);
+                %obj.hRasters(i) = axes('Parent',obj.hPanels.raster(i),'Position',[0 0 1 1],'XLim',obj.horizontalRangeRaster);
+                %obj.hPSTHs(i) = axes('Parent',obj.hPanels.psth(i),'Position',[0 0 1 1]);
+            end
+            disp('Saved plots to location: ');
             
         end
         
+        function zprvPause(obj)
+            disp('Paused Operation');
+        end
         
     end
     
