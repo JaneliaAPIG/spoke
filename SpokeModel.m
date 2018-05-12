@@ -227,6 +227,13 @@ classdef SpokeModel < most.Model
     end
     
     %Constants
+    
+    
+    % ********** NOTES *******
+    % 1. Is it possible to change plot order in tab to 2x16 (column)
+    % 2. Can we do 2x64?
+    % 3. 
+    
     properties (Hidden,Constant)
         PLOTS_PER_TAB = 32;
         MAX_NUM_TABS = 8;
@@ -275,7 +282,7 @@ classdef SpokeModel < most.Model
             
             %Initialize a default display for appearances (some aspects gets overridden by processing on start())
             %             obj.sglChanSubset = GetChannelSubset(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
-            obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
+            % - MOVED TO zprvApplyChanOrderAndSubset. obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
             obj.zprvApplyChanOrderAndSubset();
             
             numNeuralChans = numel(obj.neuralChansAvailable);
@@ -2630,14 +2637,14 @@ classdef SpokeModel < most.Model
         function zprvApplyChanOrderAndSubset(obj)
             
             if isempty(obj.sglParamCache.snsNiChanMapFile)
+                disp('no snsNiChanMapFile, defaulting to standard mapping...');
                 obj.neuralChanDispOrder = obj.neuralChansAvailable;
             else
+                disp('mapping channels to SpikeGLX order...');
                 %TODO: Apply channel mapping file to reorder neural channels
             end
             
-            if true %isequal(obj.sglChanSubset,'all')
-                %TODO: Apply subsetting correctly
-            end
+            obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
             
             obj.neuralChanAcqList = intersect(obj.sglChanSubset,obj.neuralChansAvailable);
             obj.neuralChanDispList = obj.neuralChanDispOrder; %TODO: Apply subsetting to neuralChanDispOrder
@@ -2666,6 +2673,7 @@ classdef SpokeModel < most.Model
                 %obj.hPlots(i) = axes('Parent',obj.hPanels.waveform(i),'Position',[0 0 1 1],'XLim',obj.horizontalRange); %,'YLim',obj.verticalRange);
                 %obj.hRasters(i) = axes('Parent',obj.hPanels.raster(i),'Position',[0 0 1 1],'XLim',obj.horizontalRangeRaster);
                 %obj.hPSTHs(i) = axes('Parent',obj.hPanels.psth(i),'Position',[0 0 1 1]);
+                print(obj.hPlots(i),'BarPlot','-dpng')
             end
             disp('Saved plots to location: ');
             
