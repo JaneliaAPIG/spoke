@@ -189,7 +189,7 @@ classdef SpokeModel < most.Model
         % Debug related properties.
         diagramm; %Temporary figure for debugging.
         diagrammm; %Temporary figure 2 for debugging.
-        debug = false; % Set to true to enable debugging.
+        debug = true; % Set to true to enable debugging.
     end
     
     properties (Hidden, SetAccess=immutable)
@@ -691,6 +691,17 @@ classdef SpokeModel < most.Model
         %         function val = get.sglChanSubset(obj)
         %              val = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
         %         end
+        
+        
+        % Why does setting refreshPeriodMaxWaveformRate > refreshRate cause
+        % waveformsPerPlot to be bypassed? Even if I set the
+        % waveformsPerPlot to 1, if refreshPeriodMaxWaveformRate = 16 and
+        % refreshRate = 4, I get 4 lines per plot - and also my waveform
+        % processing gets screwed up.
+        
+        % well, apparently, it has to do with some kind of max waveform
+        % processing in zlcldetectspikes.
+        
         
         function set.waveformsPerPlot(obj,val)
             obj.validatePropArg('waveformsPerPlot',val);
@@ -1705,6 +1716,7 @@ classdef SpokeModel < most.Model
                         
                         if obj.debug && h==1
                             % ****************************** DEBUG *****************************
+                            fprintf('numNewTimestamps: %d, j: %d, idxWindow: %s\n',numNewTimestamps,j,sprintf('%d ',idxWindow));
                             fprintf('j: %d, idxWindow: %s\n',j,sprintf('%d ',idxWindow));
                             fprintf('j: %d, idxWindow < 1: %s\n',j,sprintf('%d ',idxWindow < 1));
                             fprintf('j: %d, idxWindow >= 1: %s\n',j,sprintf('%d ',idxWindow >= 1));
@@ -1730,8 +1742,9 @@ classdef SpokeModel < most.Model
                             
                             if obj.debug &&  h == 1
                                 % ********************************** DEBUG ********************************
-                                fprintf('j: %d, tmpWindow: %s\n',j,sprintf('%d ',tmpWindow));
-                                fprintf('j: %d, waveform: %s\n',j,sprintf('%d ',waveform));
+                                fprintf('yabba dabba doo\n');
+                                fprintf('numNewTimestamps: %d, j: %d, tmpWindow: %s\n',numNewTimestamps, j,sprintf('%d ',tmpWindow));
+                                fprintf('numNewTimestamps: %d, j: %d, waveform: %s\n',numNewTimestamps, j,sprintf('%d ',waveform));
                                 figure(obj.diagrammm);
                                 cla;
                                 xlim manual;
@@ -2767,6 +2780,7 @@ for h=1:numel(chanSubset)
             if thresholdVal >= 0 %Find crossings above threshold level
                 nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
             else %Find crossings below threshold level
+                % Something problematic here...
                 nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
             end
         end
@@ -2823,10 +2837,12 @@ end
                 % *********************************************************************
                 % boundschecking
                 % *********************************************************************
-                beginplot = (localspikes{1}(end)-500);
+                beginplot = (localspikes{1}(1)-500);
                 endplot = (localspikes{1}(end)+500);
-                spikelocation = localspikes{1}(end);
-                %fprintf('beginplot: %d, endplot: %d, spikeLocation: %d, localspikes: %s \n',beginplot,endplot,spikelocation,sprintf('%d ',localspikes{1}));
+                for iter = 1:numel(localspikes{1})
+                    spikelocation(iter) = localspikes{1}(iter);
+                end
+                fprintf('beginplot: %d, endplot: %d, spikeLocation: %d, localspikes: %s \n',beginplot,endplot,spikelocation,sprintf('%d ',localspikes{1}));
 
                 if beginplot < 1
                     beginplot = 1;
@@ -2852,7 +2868,11 @@ end
                 text(10,1900,sprintf('localspikes: %s',sprintf('%d ',localspikes{1})));
                 plot(tempbuffer);
                 plot(thresholdVal(1)*ones(1,buffersize));
-                line([spikelocation spikelocation],get(gca, 'ylim'),'Color','red','LineStyle','--')
+
+                for iter = 1:numel(localspikes{1})
+                    line([spikelocation(iter) spikelocation(iter)],get(gca, 'ylim'),'Color','red','LineStyle','--')
+                end
+                
                 hold off;
             end
         end    
