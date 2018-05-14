@@ -2406,7 +2406,7 @@ classdef SpokeModel < most.Model
                         obj.hThresholdLines{1}(plotIdx) = line('Parent',obj.hPlots(plotIdx),'Color','r',dataArgs{:}); %'EraseMode','none',
                         
                         if obj.thresholdAbsolute
-                            obj.hThresholdLines{0}(plotIdx) = line('Parent',obj.hPlots(plotIdx),'Color','r',dataArgs2{:}); %'EraseMode','none',
+                            obj.hThresholdLines{2}(plotIdx) = line('Parent',obj.hPlots(plotIdx),'Color','r',dataArgs2{:}); %'EraseMode','none',
                         end
                     else
                         set(obj.hThresholdLines{1}(plotIdx),dataArgs{:});
@@ -2780,7 +2780,8 @@ for h=1:numel(chanSubset)
             if thresholdVal >= 0 %Find crossings above threshold level
                 nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
             else %Find crossings below threshold level
-                % Something problematic here...
+                % Something wrong here. Sometimes, this finds negative
+                % slope zero crossings.
                 nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
             end
         end
