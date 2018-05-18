@@ -2710,7 +2710,7 @@ classdef SpokeModel < most.Model
                 obj.neuralChanDispOrder = obj.neuralChansAvailable;
             else
                 fprintf('Channel Remapping: using snsNiChanMapFile located at: %s\n',obj.sglParamCache.snsNiChanMapFile);
-                
+                outputChanArray = parseChanMapFile(obj,obj.sglParamCache.snsNiChanMapFile)
             end
             
             obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
