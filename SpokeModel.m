@@ -189,7 +189,7 @@ classdef SpokeModel < most.Model
         % Debug related properties.
         diagramm; %Temporary figure for debugging.
         diagrammm; %Temporary figure 2 for debugging.
-        debug = true; % Set to true to enable debugging.
+        debug = false; % Set to true to enable debugging.
     end
     
     properties (Hidden, SetAccess=immutable)
@@ -1006,8 +1006,8 @@ classdef SpokeModel < most.Model
             end
             
             if obj.debug
-                obj.diagramm = figure('name','temporary plot');
-                obj.diagrammm = figure('name','temporary plot 2');
+                obj.diagramm = figure('name','raw spike plot (set to debug to false to get rid of this.');
+                %obj.diagrammm = figure('name','temporary plot 2');
             end
             
             %Open SpikeGL connection & updateparameter cache
@@ -1308,6 +1308,57 @@ classdef SpokeModel < most.Model
             
             
         end
+
+        function outputChanArray = parseChanMapFile(obj,filename)
+            % obj.sglParamCache.snsNiChanMapFile
+            fileId = fopen(filename,'r');
+            tempString = fread(fileId,'*char');
+            
+            % Assume that the file orders channels 0 to 255. So to create a
+            % mapping, just read in the second channel to the mapping
+            % array.
+           
+            tempInputArray = [];
+            inputChanArray = [];
+            inputChan=false;
+
+            
+            tempOutputArray = [];
+            outputChanArray = [];
+            outputChan=false;
+            
+            for iter = 1:size(tempString,1)
+                % Gate whether we are looking at input channels or output
+                % channels.
+                if tempString(iter) == ' '
+                   outputChan = true;
+                   inputChan = false;
+                elseif tempString(iter) == ';'
+                   outputChan = false;
+                   inputChan = true;
+                elseif tempString(iter) == 'M'
+                    outputChan = false;
+                    inputChan = false;
+                end
+                                
+                % Set up the arrays as necessary.
+                if outputChan
+                    tempOutputArray = [tempOutputArray tempString(iter)];
+                    %Convert the temp arrays to integers.
+                    if ~isempty(tempInputArray)
+                        inputChanArray = [inputChanArray str2num(tempInputArray)];
+                        tempInputArray = [];
+                    end
+                elseif inputChan
+                    tempInputArray = [tempInputArray tempString(iter)];
+                    if ~isempty(tempOutputArray)
+                        outputChanArray = [outputChanArray str2num(tempOutputArray)];
+                        tempOutputArray = [];
+                    end
+                end                
+            end 
+        end
+               
         
         function quit(obj)
             % Delete timer objects.
@@ -1745,6 +1796,11 @@ classdef SpokeModel < most.Model
                                 fprintf('yabba dabba doo\n');
                                 fprintf('numNewTimestamps: %d, j: %d, tmpWindow: %s\n',numNewTimestamps, j,sprintf('%d ',tmpWindow));
                                 fprintf('numNewTimestamps: %d, j: %d, waveform: %s\n',numNewTimestamps, j,sprintf('%d ',waveform));
+
+                                if isempty(obj.diagrammm)
+                                    obj.diagrammm = figure('name','temporary plot 2');
+                                end
+                                
                                 figure(obj.diagrammm);
                                 cla;
                                 xlim manual;
@@ -2650,11 +2706,11 @@ classdef SpokeModel < most.Model
         function zprvApplyChanOrderAndSubset(obj)
             
             if isempty(obj.sglParamCache.snsNiChanMapFile)
-                disp('no snsNiChanMapFile, defaulting to standard mapping...');
+                fprintf('Channel Remapping: no snsNiChanMapFile defined in SpikeGLX, defaulting to standard mapping...\n');
                 obj.neuralChanDispOrder = obj.neuralChansAvailable;
             else
-                disp('mapping channels to SpikeGLX order...');
-                %TODO: Apply channel mapping file to reorder neural channels
+                fprintf('Channel Remapping: using snsNiChanMapFile located at: %s\n',obj.sglParamCache.snsNiChanMapFile);
+                
             end
             
             obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
@@ -2695,6 +2751,7 @@ classdef SpokeModel < most.Model
         function zprvPause(obj)
             disp('Paused Operation');
         end
+        
         
     end
     
@@ -2780,8 +2837,6 @@ for h=1:numel(chanSubset)
             if thresholdVal >= 0 %Find crossings above threshold level
                 nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
             else %Find crossings below threshold level
-                % Something wrong here. Sometimes, this finds negative
-                % slope zero crossings.
                 nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
             end
         end
@@ -2821,8 +2876,8 @@ for h=1:numel(chanSubset)
 
         %Impose refractory period
         currIdx = nextSpikeIdx + postSpikeNumScans; %Will start with final scan of the post-spike-window...to use as first scan for next diff operation (first element never selected)
-
     end
+    
 end 
     if debug
         % *********************************************************************
