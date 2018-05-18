@@ -353,6 +353,7 @@ classdef SpokeModel < most.Model
             
             %Add pushbuttons to the waveform and raster grids.
             obj.hButtons.toolbar = uitoolbar(obj.hFigs.waveform);
+            
             % Read an image
             [img,map] = imread(fullfile(matlabroot, 'toolbox','matlab','icons','matlabicon.gif'));
 
@@ -903,10 +904,28 @@ classdef SpokeModel < most.Model
                 most.idioms.deleteHandle(obj.hChanLabels.psth);
                 
                 hAxes = obj.displayModeAxes;
+
                 for i=1:length(tcn)
-                    %Display with 0-based channel index
-                    obj.hChanLabels.(dispType)(i) = text('Parent',hAxes(i),'String',num2str(tcn(i) - 1),'HandleVisibility','off','FontWeight','bold','Color','k','Units','normalized','Position',[.08 .92],'HorizontalAlignment','center');
-                    obj.hChanLabels.psth(i) = text('Parent',obj.hPSTHs(i),'String',num2str(tcn(i) - 1),'HandleVisibility','off','FontWeight','bold','Color','k','Units','normalized','Position',[.08 .92],'HorizontalAlignment','center');
+                    actualChannelNumber = tcn(i) - 1;
+                    if ~isequal(obj.neuralChanDispOrder, obj.neuralChansAvailable)
+                        %Use channel mapping numbers (if they exist)
+                        tempChannelNumber = obj.neuralChanDispOrder( tcn(i) );
+                        if tempChannelNumber ~= tcn(i) - 1
+                            channelNumberString = strcat(num2str(tempChannelNumber),' (',num2str(tcn(i) - 1),')');
+                            textPosition = [.13 .92];
+                        else
+                            channelNumberString = num2str(tcn(i) - 1);
+                            textPosition = [.08 .92];
+                        end
+                    else
+                        %Display with 0-based channel index
+                        tempChannelNumber = tcn(i) - 1;
+                        channelNumberString = num2str(tcn(i) - 1);
+                        textPosition = [.08 .92];
+                    end
+                    
+                    obj.hChanLabels.(dispType)(i) = text('Parent',hAxes(i),'String',channelNumberString,'HandleVisibility','off','FontWeight','bold','Color','k','Units','normalized','Position',textPosition,'HorizontalAlignment','center');
+                    obj.hChanLabels.psth(i) = text('Parent',obj.hPSTHs(i),'String',channelNumberString,'HandleVisibility','off','FontWeight','bold','Color','k','Units','normalized','Position',textPosition,'HorizontalAlignment','center');
                 end
                 
                 %Update threshold lines/raster plots, as appropriate
@@ -1343,20 +1362,30 @@ classdef SpokeModel < most.Model
                                 
                 % Set up the arrays as necessary.
                 if outputChan
-                    tempOutputArray = [tempOutputArray tempString(iter)];
+                    if tempString(iter) ~= ' ' && tempString(iter) ~= ';' && ~isletter(tempString(iter))
+                        tempOutputArray = [tempOutputArray tempString(iter)];
+                    end
+                    
                     %Convert the temp arrays to integers.
-                    if ~isempty(tempInputArray)
-                        inputChanArray = [inputChanArray str2num(tempInputArray)];
-                        tempInputArray = [];
+                    if ~isempty(tempInputArray) %&& ismember(str2num(tempInputArray), obj.neuralChansAvailable)
+                        if ismember(str2num(tempInputArray), obj.neuralChansAvailable)
+                            inputChanArray = [inputChanArray str2num(tempInputArray)];
+                            tempInputArray = [];
+                        end
                     end
                 elseif inputChan
-                    tempInputArray = [tempInputArray tempString(iter)];
-                    if ~isempty(tempOutputArray)
-                        outputChanArray = [outputChanArray str2num(tempOutputArray)];
-                        tempOutputArray = [];
+                    if tempString(iter) ~= ' ' && tempString(iter) ~= ';' && ~isletter(tempString(iter))
+                        tempInputArray = [tempInputArray tempString(iter)];
+                    end
+                                    
+                    if ~isempty(tempOutputArray) %&& ismember(str2num(tempOutputArray), obj.neuralChansAvailable)
+                        if ismember(str2num(tempOutputArray), obj.neuralChansAvailable)
+                            outputChanArray = [outputChanArray str2num(tempOutputArray)];
+                            tempOutputArray = [];
+                        end
                     end
                 end                
-            end 
+            end
         end
                
         
@@ -2710,13 +2739,13 @@ classdef SpokeModel < most.Model
                 obj.neuralChanDispOrder = obj.neuralChansAvailable;
             else
                 fprintf('Channel Remapping: using snsNiChanMapFile located at: %s\n',obj.sglParamCache.snsNiChanMapFile);
-                outputChanArray = parseChanMapFile(obj,obj.sglParamCache.snsNiChanMapFile)
+                obj.neuralChanDispOrder = parseChanMapFile(obj,obj.sglParamCache.snsNiChanMapFile);
             end
             
             obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
             
             obj.neuralChanAcqList = intersect(obj.sglChanSubset,obj.neuralChansAvailable);
-            obj.neuralChanDispList = obj.neuralChanDispOrder; %TODO: Apply subsetting to neuralChanDispOrder
+            obj.neuralChanDispList = obj.neuralChanDispOrder; %TODO: Apply subsetting to neuralChanDispOrder - ed: I thought subsets were displayed in strict channel order - what would change in the display due to subsetting?
             obj.auxChanProcList = [obj.analogMuxChansAvailable obj.analogSoloChansAvailable];
         end
         
@@ -2751,8 +2780,6 @@ classdef SpokeModel < most.Model
         function zprvPause(obj)
             disp('Paused Operation');
         end
-        
-        
     end
     
     
