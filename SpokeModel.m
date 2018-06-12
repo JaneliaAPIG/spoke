@@ -390,7 +390,7 @@ classdef SpokeModel < most.Model
                 rowCount = ceil(i/gridDimensionX);
                 colCount = mod(i-1,gridDimensionX) + 1;
                 
-                panelPosn = [(colCount-1)*gridPanelSizeX  (gridDimensionY-rowCount)*gridPanelSizeY gridPanelSizeX gridPanelSizeY];
+                panelPosn = [(colCount-1)*gridPanelSizeX (gridDimensionY-rowCount)*gridPanelSizeY gridPanelSizeX gridPanelSizeY];
                 
                 obj.hPanels.waveform(i) = uipanel(obj.hFigs.waveform,'Position',panelPosn);
                 obj.hPanels.raster(i) = uipanel(obj.hFigs.raster,'Position',panelPosn);
@@ -680,9 +680,13 @@ classdef SpokeModel < most.Model
             %Ensure value does not exceed processing refresh period
             dval = diff(val);
             f_samp = obj.sglParamCache.niSampRate;
+            
+            fprintf('Horizontal range = ceil(%f * %f) = %f\n',dval,f_samp,ceil(dval * f_samp) );
+            fprintf('Processing refresh period = floor(%f / %f) = %f\n',f_samp,obj.refreshRate,floor(f_samp/obj.refreshRate) );
+            
             assert(dval > 0,'Horizontal range must be specified from minimum to maximum');
             assert(ceil(dval * f_samp) < floor(f_samp/obj.refreshRate),'horizontalRange must be shorter than the processing refresh period');
-            
+                        
             obj.horizontalRange = val;
             
             %Side-effects
