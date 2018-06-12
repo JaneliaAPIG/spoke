@@ -343,6 +343,12 @@ classdef SpokeModel < most.Model
             gridDimension = ceil(sqrt(numPlots));
             gridPanelSize = 1/gridDimension;
             
+            gridDimensionX = 2;
+            gridDimensionY = 16;
+            
+            gridPanelSizeX = 1/gridDimensionX;
+            gridPanelSizeY = 1/gridDimensionY;
+            
             %Create waveform & raster grids
             obj.hFigs.waveform = most.idioms.figureScaled(1.6,'Name','Spoke Waveform Grid','CloseRequestFcn',@(src,evnt)set(src,'Visible','off'));
             obj.hFigs.raster = most.idioms.figureScaled(1.6,'Name','Spoke Raster Grid','CloseRequestFcn',@(src,evnt)set(src,'Visible','off'));
@@ -370,14 +376,21 @@ classdef SpokeModel < most.Model
              % Set the button icon
             obj.hButtons.screenshot.CData = icon;
             obj.hButtons.pause.CData = icon;
-             
+            
+            fprintf('gridDimension: %d, gridPanelSize: %d, rowCount: %d, colCount: %d\n',gridDimension,gridPanelSize,ceil(1/gridDimension),mod(0,gridDimension) + 1);            
+            
             %TODO: Use gobjects
             for i=1:numPlots
                 
                 %Place panel from top-left, counting right and then down
-                rowCount = ceil(i/gridDimension);
-                colCount = mod(i-1,gridDimension) + 1;
-                panelPosn = [(colCount-1)*gridPanelSize  (gridDimension-rowCount)*gridPanelSize gridPanelSize gridPanelSize];
+                %rowCount = ceil(i/gridDimension);
+                %colCount = mod(i-1,gridDimension) + 1;                
+                %panelPosn = [(colCount-1)*gridPanelSize  (gridDimension-rowCount)*gridPanelSize gridPanelSize gridPanelSize];
+                
+                rowCount = ceil(i/gridDimensionX);
+                colCount = mod(i-1,gridDimensionX) + 1;
+                
+                panelPosn = [(colCount-1)*gridPanelSizeX  (gridDimensionY-rowCount)*gridPanelSizeY gridPanelSizeX gridPanelSizeY];
                 
                 obj.hPanels.waveform(i) = uipanel(obj.hFigs.waveform,'Position',panelPosn);
                 obj.hPanels.raster(i) = uipanel(obj.hFigs.raster,'Position',panelPosn);
