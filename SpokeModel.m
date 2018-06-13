@@ -1356,55 +1356,60 @@ classdef SpokeModel < most.Model
            
             tempInputArray = [];
             inputChanArray = [];
-            inputChan=false;
 
-            
             tempOutputArray = [];
             outputChanArray = [];
-            outputChan=false;
+            
+            outputChan = false;
+            inputChan = false;
+            processChan=false;
             
             for iter = 1:size(tempString,1)
                 % Gate whether we are looking at input channels or output
                 % channels.
+                
                 if tempString(iter) == ' '
                    outputChan = true;
                    inputChan = false;
+                   processChan=false;
                 elseif tempString(iter) == ';'
                    outputChan = false;
                    inputChan = true;
-                elseif tempString(iter) == 'M'
-                    outputChan = false;
-                    inputChan = false;
+                   processChan=false;
+                elseif tempString(iter) == 'M' || ismember(tempString(iter), char([10 13]))
+                   outputChan = false;
+                   inputChan = false;
+                   processChan = true;
                 end
                                 
                 % Set up the arrays as necessary.
-                if outputChan
-                    if tempString(iter) ~= ' ' && tempString(iter) ~= ';' && ~isletter(tempString(iter))
+                if outputChan                    
+                    if isstrprop(tempString(iter),'digit') % tempString(iter) ~= ' ' && tempString(iter) ~= ';' && ~isletter(tempString(iter))
                         tempOutputArray = [tempOutputArray tempString(iter)];
                     end
                     
                     %Convert the temp arrays to integers.
                     if ~isempty(tempInputArray) %&& ismember(str2num(tempInputArray), obj.neuralChansAvailable)
-                        if ismember(str2num(tempInputArray), obj.neuralChansAvailable)
+                        if ismember(str2num(tempInputArray), [obj.neuralChansAvailable, obj.analogMuxChansAvailable ])
                             inputChanArray = [inputChanArray str2num(tempInputArray)];
                             tempInputArray = [];
                         end
-                    end
+                    end                    
                 elseif inputChan
-                    if tempString(iter) ~= ' ' && tempString(iter) ~= ';' && ~isletter(tempString(iter))
+                    if isstrprop(tempString(iter),'digit') % tempString(iter) ~= ' ' && tempString(iter) ~= ';' && ~isletter(tempString(iter))
                         tempInputArray = [tempInputArray tempString(iter)];
                     end
                                     
                     if ~isempty(tempOutputArray) %&& ismember(str2num(tempOutputArray), obj.neuralChansAvailable)
-                        if ismember(str2num(tempOutputArray), obj.neuralChansAvailable)
+                        if ismember(str2num(tempOutputArray), [obj.neuralChansAvailable, obj.analogMuxChansAvailable ])
                             outputChanArray = [outputChanArray str2num(tempOutputArray)];
                             tempOutputArray = [];
                         end
                     end
-                end                
+                elseif processChan
+                end
             end
         end
-               
         
         function quit(obj)
             % Delete timer objects.
@@ -2220,6 +2225,10 @@ classdef SpokeModel < most.Model
             plotCount = 0;
             for c=obj.tabChanNumbers
                 plotCount = plotCount + 1;
+                % EKK - change channel number of tab to mapped channel
+                % number.
+                actualChannelNumber = obj.neuralChanDispOrder(c);
+
                 
                 
                 %if isempty(obj.reducedData{j}) || chanNewSpikes(j) == 0 || isempty(obj.reducedData{j}.stimEventTypeStruct)
@@ -2359,6 +2368,11 @@ classdef SpokeModel < most.Model
                     continue;
                 end
                 plotIdx = mod(i-1,obj.PLOTS_PER_TAB) + 1;
+                
+                
+                % EKK - change channel number of tab to mapped channel
+                % number.
+                actualChannelNumber = obj.neuralChanDispOrder(i);
                 
                 numNewWaveforms = length(obj.reducedData{i}.scanNums);
                 totalNewWaveforms = totalNewWaveforms + numNewWaveforms;
@@ -2756,7 +2770,7 @@ classdef SpokeModel < most.Model
                 obj.neuralChanDispOrder = obj.neuralChansAvailable;
             else
                 fprintf('Channel Remapping: using snsNiChanMapFile located at: %s\n',obj.sglParamCache.snsNiChanMapFile);
-                obj.neuralChanDispOrder = parseChanMapFile(obj,obj.sglParamCache.snsNiChanMapFile);
+                obj.neuralChanDispOrder = parseChanMapFile(obj,obj.sglParamCache.snsNiChanMapFile);                
             end
             
             obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
