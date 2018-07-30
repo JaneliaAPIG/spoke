@@ -1713,7 +1713,12 @@ classdef SpokeModel < most.Model
                 bufStartScanNum = obj.bufScanNumEnd - scansToRead - size(obj.fullDataBuffer,1); %Start index of fullDataBuffer (including previously read samples carried over from last timer batch, the last post-window worth not yet processed)
                 
                 %dfprintf('before augment: fulldatabuffer size: %d\n', size(obj.fullDataBuffer,1));
+                fprintf('scanstoRead: %d, size of full data buffer: %d, size of array: %d\n',scansToRead, obj.fullDataBuffer, size(newData));
+
                 obj.fullDataBuffer = [obj.fullDataBuffer; newData];
+                
+                fprintf('scansToRead: %d, size of full data buffer: %d, size of array: %d\n',scansToRead, obj.fullDataBuffer, size(newData));
+                
                 %dfprintf('after augment: fulldatabuffer size: %d\n', size(obj.fullDataBuffer,1));
             end
             
