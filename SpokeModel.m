@@ -1490,17 +1490,16 @@ classdef SpokeModel < most.Model
                 obj.lastMaxReadableScanNum = obj.lastMaxReadableScanNum + scansToRead;
                 t1 = toc(t0);
                 
-                
                 %STAGE 2: Apply global mean subtraction, if applicable. Applies only to neural channels. TODO: Restrict to displayed channels
                 if obj.globalMeanSubtraction
-                    %                     newData(:,1:numNeuralChans) = newData(:,1:numNeuralChans) - mean(mean(newData(:,1:numNeuralChans)));
-                    newData(:,1:obj.sglChanSubset) = newData(:,1:obj.sglChanSubset) - mean(mean(newData(:,1:obj.sglChanSubset)));
+                    newData(:,1:numNeuralChans) = newData(:,1:numNeuralChans) - mean(mean(newData(:,1:numNeuralChans)));
+                    %newData(:,1:obj.sglChanSubset) = newData(:,1:obj.sglChanSubset) - mean(mean(newData(:,1:obj.sglChanSubset)));
                 end
                 t2 = toc(t0);
                 
                 %STAGE 3: Filter data if needed. Also: housekeeping to form fullDataBuffer & partialWaveformBuffer for subsequent processing stages.
                 if ~isempty(obj.filterCoefficients)
-                    [newData,obj.filterCondition] = filter(obj.filterCoefficients{2},obj.filterCoefficients{1},double(newData),obj.filterCondition); %Convert to double..but still in A/D count values, not voltages
+                    [newData(1:numNeuralChans),obj.filterCondition] = filter(obj.filterCoefficients{2},obj.filterCoefficients{1},double(newData(1:numNeuralChans)),obj.filterCondition); %Convert to double..but still in A/D count values, not voltages
                 end
                 
                 %Housekeeping: Form partialWaveformBuffer, appending new data
