@@ -2465,48 +2465,52 @@ classdef SpokeModel < most.Model
             handlesToClear = [obj.hThresholdLines{1}(isgraphics(obj.hThresholdLines{1})); obj.hThresholdLines{2}(isgraphics(obj.hThresholdLines{2}))];
             %set(handlesToClear,'EraseMode','normal');
             delete(handlesToClear);
-            %Compute all-channel threshold; determine lack of threshold val -- as applicable
-            perChanThreshold = ~strcmpi(obj.thresholdType,obj.waveformAmpUnits);
-            if perChanThreshold %RMS threshold with voltage units -- this is only mismatch type presently allowed
-                if isempty(obj.baselineRMS)
-                    obj.hThresholdLines = repmat({ones(numNeuralChans,1) * -1},2,1);
-                    return; %nothing to draw
-                end
-            else %matched units/threshold-type
-                threshold = obj.thresholdVal;
-            end
-            
-            %Draw threshold for each channel, computing for each channel if needed
-            xData = obj.horizontalRange;
-            
-            for i=obj.tabChanNumbers
-                plotIdx = mod(i-1,obj.PLOTS_PER_TAB) + 1;
-                
-                if perChanThreshold
-                    threshold = obj.thresholdVal * obj.baselineRMS(i) * obj.voltsPerBitNeural;
+            stimulusMode = ~isempty(obj.stimStartChannel) && ~isempty(obj.stimStartThreshold);
+            stimulusTriggeredWaveformMode = strcmpi(obj.displayMode,'waveform') && stimulusMode;
+            if ~stimulusTriggeredWaveformMode %Only draw threshold if not in stimulus trigger mode
+                %Compute all-channel threshold; determine lack of threshold val -- as applicable
+                perChanThreshold = ~strcmpi(obj.thresholdType,obj.waveformAmpUnits);
+                if perChanThreshold %RMS threshold with voltage units -- this is only mismatch type presently allowed
+                    if isempty(obj.baselineRMS)
+                        obj.hThresholdLines = repmat({ones(numNeuralChans,1) * -1},2,1);
+                        return; %nothing to draw
+                    end
+                else %matched units/threshold-type
+                    threshold = obj.thresholdVal;
                 end
                 
-                if ~isempty(threshold)
-                    dataArgs = {'XData',xData,'YData',[threshold threshold]};
+                %Draw threshold for each channel, computing for each channel if needed
+                xData = obj.horizontalRange;
+                
+                for i=obj.tabChanNumbers
+                    plotIdx = mod(i-1,obj.PLOTS_PER_TAB) + 1;
                     
-                    if obj.thresholdAbsolute
-                        dataArgs2 = {'XData',xData,'YData',[-threshold -threshold]};
+                    if perChanThreshold
+                        threshold = obj.thresholdVal * obj.baselineRMS(i) * obj.voltsPerBitNeural;
                     end
                     
-                    if numel(obj.hThresholdLines{1}) < plotIdx || ~isgraphics(obj.hThresholdLines{1}(plotIdx))
-                        obj.hThresholdLines{1}(plotIdx) = line('Parent',obj.hPlots(plotIdx),'Color','r',dataArgs{:}); %'EraseMode','none',
+                    if ~isempty(threshold)
+                        dataArgs = {'XData',xData,'YData',[threshold threshold]};
                         
                         if obj.thresholdAbsolute
-                            obj.hThresholdLines{2}(plotIdx) = line('Parent',obj.hPlots(plotIdx),'Color','r',dataArgs2{:}); %'EraseMode','none',
+                            dataArgs2 = {'XData',xData,'YData',[-threshold -threshold]};
                         end
-                    else
-                        set(obj.hThresholdLines{1}(plotIdx),dataArgs{:});
-                        if obj.thresholdAbsolute
-                            set(obj.hThresholdLines{2}(plotIdx),dataArgs2{:});
+                        
+                        if numel(obj.hThresholdLines{1}) < plotIdx || ~isgraphics(obj.hThresholdLines{1}(plotIdx))
+                            obj.hThresholdLines{1}(plotIdx) = line('Parent',obj.hPlots(plotIdx),'Color','r',dataArgs{:}); %'EraseMode','none',
+                            
+                            if obj.thresholdAbsolute
+                                obj.hThresholdLines{2}(plotIdx) = line('Parent',obj.hPlots(plotIdx),'Color','r',dataArgs2{:}); %'EraseMode','none',
+                            end
+                        else
+                            set(obj.hThresholdLines{1}(plotIdx),dataArgs{:});
+                            if obj.thresholdAbsolute
+                                set(obj.hThresholdLines{2}(plotIdx),dataArgs2{:});
+                            end
                         end
                     end
+                    
                 end
-                
             end
         end
         
