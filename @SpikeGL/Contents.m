@@ -3,26 +3,31 @@
 %
 % The @SpikeGL class is a MATLAB object with methods to access the
 % SpikeGLX program via TCP/IP. SpikeGLX and MATLAB can run on the
-% same machine (transparently via a loopback socket) or across a
-% network.
+% same machine (via loopback socket address 127.0.0.1 and port 4142)
+% or across a network.
 %
-% This class provides nearly total control over a running SpikeGLX
-% process -- starting and stopping a run, setting parameters, calling
-% the Par2 and SHA1 tools, and so on.
+% This class provides extensive control over a running SpikeGLX process:
+% starting and stopping a run, setting parameters, calling the Par2 and
+% SHA1 tools, and so on.
 %
-% Instances of @SpikeGL are weakly stateful: merely keeping a handle to a
-% network socket. As such, it is ok to constantly create and destroy these
-% objects. Each network connection cleans up after itself after 10 seconds
-% of inactivity.
+% Users of this class merely need to construct an instance of a @SpikeGL
+% object and all network communication with the SpikeGLX process is handled
+% automatically.
 %
 % The network socket handle is used with the 'CalinsNetMex' mexFunction,
 % which is a helper mexFunction that does all the actual socket
 % communications for this class (since MATLAB lacks native network
 % support).
 %
-% Users of this class merely need to construct an instance of a @SpikeGL
-% object and all network communication with the SpikeGLX process is handled
-% automatically.
+% Instances of @SpikeGL are weakly stateful: merely keeping a handle to a
+% network socket. It is ok to create and destroy several of these objects.
+% Each network connection cleans up after itself after 10 seconds of
+% inactivity. By the way, if your script has pauses longer than 10 seconds,
+% and you reuse a handle that has timed out, the handle will automatically
+% reestablish a connection and the script will likely continue without
+% problems, but a warning will appear in the Command Window refelecting
+% the timeout. Such warnings have a warningid, so you can suppress them
+% by typing >> warning( 'off', 'CalinsNetMex:connectionClosed' ).
 %
 %
 % EXAMPLES
@@ -78,8 +83,8 @@
 %                Returns a vector containing the indices of
 %                channels being saved.
 %
-%    [daqData,headCt] = FetchIm( myObj, start_scan, scan_ct, channel_subset, downsample_factor ),
-%                       FetchNi( myObj, start_scan, scan_ct, channel_subset, downsample_factor )
+%    [daqData,headCt] = FetchIm( myObj, start_scan, scan_ct, channel_subset, downsample_ratio ),
+%                       FetchNi( myObj, start_scan, scan_ct, channel_subset, downsample_ratio )
 %
 %                Get MxN matrix of stream data.
 %                M = scan_ct = max samples to fetch.
@@ -93,11 +98,11 @@
 %
 %                Also returns headCt = index of first timepoint in matrix.
 %
-%    [daqData,headCt] = FetchLatestIm( myObj, NUM, channel_subset, downsample_ratio ),
-%                       FetchLatestNi( myObj, NUM, channel_subset, downsample_ratio )
+%    [daqData,headCt] = FetchLatestIm( myObj, scan_ct, channel_subset, downsample_ratio ),
+%                       FetchLatestNi( myObj, scan_ct, channel_subset, downsample_ratio )
 %
 %                Get MxN matrix of the most recent stream data.
-%                M = NUM = max samples to fetch.
+%                M = scan_ct = max samples to fetch.
 %                N = channel count...
 %                    If channel_subset is not specified, N = current
 %                    SpikeGLX save-channel subset.
@@ -105,6 +110,11 @@
 %                downsample_ratio is an integer (default = 1).
 %
 %                Also returns headCt = index of first timepoint in matrix.
+%
+%    [SN,option] = GetImProbeSN( myobj )
+%
+%                Returns serial number string (SN) and integer option
+%                of current IMEC probe.
 %
 %    params = GetParams( myobj )
 %
@@ -134,8 +144,7 @@
 %    time = GetTime( myobj )
 %
 %                Returns (double) number of seconds since SpikeGLX application
-%                was launched. This queries the high precision timer, so has
-%                better than microsecond resolution.
+%                was launched.
 %
 %    version = GetVersion( myobj )
 %
@@ -178,21 +187,21 @@
 %
 %                Progress is reported to the command window.
 %
-%    myobj = SetAOEnable( myobj, bool_flag )
+%    myobj = SetAudioEnable( myobj, bool_flag )
 %
-%                Set analog output on/off. Note that this command has
+%                Set audio output on/off. Note that this command has
 %                no effect if not currently running.
 %
-%    myobj = SetAOParams( myobj, params_struct )
+%    myobj = SetAudioParams( myobj, params_struct )
 %
-%                Set parameters for analog-out operation. Parameters are
-%                a struct of name/value pairs. This call stops current AO.
-%                Call SetAOEnable( myobj, 1 ) to restart it.
+%                Set parameters for audio-out operation. Parameters are a
+%                struct of name/value pairs. This call stops current output.
+%                Call SetAudioEnable( myobj, 1 ) to restart it.
 %
-%    myobj = SetDigOut( myobj, bool_flag, channel )
+%    myobj = SetDigOut( myobj, bool_flag, channels )
 %
 %                Set digital output on/off. Channel strings have form:
-%                'Dev6/port0/line2'.
+%                'Dev6/port0/line2,Dev6/port0/line5'.
 %
 %    myobj = SetParams( myobj, params_struct )
 %
@@ -216,7 +225,13 @@
 %                Set the run name for the next time files are created
 %                (either by SetTrgEnable() or by StartRun()).
 %
-%    myobj = StartRun( myobj)
+%    myobj = SetMetaData( myobj, metadata_struct )
+%
+%                If a run is in progress, set meta data to be added to the
+%                next output file set. Meta data must be in the form of a
+%                struct of name/value pairs.
+%
+%    myobj = StartRun( myobj )
 %    myobj = StartRun( myobj, params )
 %    myobj = StartRun( myobj, runName )
 %
@@ -234,9 +249,9 @@
 %    res = VerifySha1( myobj, filename )
 %
 %                Verifies the SHA1 sum of the file specified by filename.
-%                If filename is relative, it is interpreted as being
-%                relative to the run dir. Absolute filenames (starting
-%                with a '/') are supported as well. Since this is a long
-%                operation, this functions uses the 'disp' command to print
-%                progress information to the MATLAB console. The returned
-%                value is 1 if verified, 0 otherwise.
+%                If filename is relative, it is appended to the run dir.
+%                Absolute path/filenames are also supported. Since this is
+%                a potentially long operation, it uses the 'disp' command
+%                to print progress information to the MATLAB console. The
+%                returned value is 1 if verified, 0 otherwise.
+

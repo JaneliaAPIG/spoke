@@ -6,16 +6,17 @@ function [sm] = ChkConn( sm )
         return;
     end
 
+    sm.in_chkconn = 1;
+
     if( sm.handle == -1 )
 
         sm.handle = CalinsNetMex( 'create', sm.host, sm.port );
 
         if( isempty( CalinsNetMex( 'connect', sm.handle ) ) )
-            error( 'Unable to connect to server. Please make sure SpikeGLX is running, and an acquisition has been started. If SpikeGLX is running on a separate machine, please specify the IP address.' );
+            error( 'Unable to connect to server.' );
         end
 
-        sm.in_chkconn	= 1;
-        sm.ver          = DoQueryCmd( sm, 'GETVERSION' );
+        sm.ver = DoQueryCmd( sm, 'GETVERSION' );
 
     else
 
@@ -27,7 +28,7 @@ function [sm] = ChkConn( sm )
                 error( 'Still unable to connect to server.' );
             end
         end
-
-        sm.in_chkconn = 1;
     end
+
+    sm.in_chkconn = 0;
 end
