@@ -299,8 +299,6 @@ classdef SpokeModel < most.Model
             obj.zprvResetReducedData();
             
             %Initialize a default display for appearances (some aspects gets overridden by processing on start())
-            %             obj.sglChanSubset = GetChannelSubset(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
-            % - MOVED TO zprvApplyChanOrderAndSubset. obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
             obj.zprvApplyChanOrderAndSubset();
             
             numNeuralChans = numel(obj.neuralChansAvailable);
@@ -2769,7 +2767,7 @@ classdef SpokeModel < most.Model
                 obj.neuralChanDispOrder = parseChanMapFile(obj,obj.sglParamCache.snsNiChanMapFile);
             end
             
-            obj.sglChanSubset = obj.sglDeviceFcns.GetSaveChans(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
+            obj.sglChanSubset = obj.sglDeviceFcns.GetSaveChans(obj.hSGL); %channel subset as specified in SpikeGLX.
             
             obj.neuralChanAcqList = intersect(obj.sglChanSubset,obj.neuralChansAvailable);
             obj.neuralChanDispList = obj.neuralChanDispOrder; %TODO: Apply subsetting to neuralChanDispOrder - ed: I thought subsets were displayed in strict channel order - what would change in the display due to subsetting?
