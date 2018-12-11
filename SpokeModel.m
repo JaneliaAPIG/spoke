@@ -2381,9 +2381,6 @@ classdef SpokeModel < most.Model
                 
             end
             
-if totalNewWaveforms > 0            
-fprintf('Plot 1 mean: %d\n',mean(obj.reducedData{1}.waveforms{1}));
-end
             
             %Clear oldest partial waveforms stored, now that they're plotted
             if ~isempty(obj.waveformWrap)
@@ -2398,19 +2395,19 @@ end
                 assert(length(waveform) == length(xData),'Waveform data for chan %d (%d), spike %d not of expected length (%d)\n',i,length(waveform),j,length(xData));             
                 
                 %Scale waveform from A/D units to target units.
-                %If in spike-triggered waveform mode, apply mean subtraction if thresholdType='rmsMultiple' (TODO: confirm/comment on why this is needed)
                 switch obj.waveformAmpUnits
-                    case 'volts'
-                        if strcmpi(obj.thresholdType,'volts') || stimulusTriggeredWaveformMode %no mean subtraction...just show as is
-                            waveform = double(waveform) * obj.voltsPerBitNeural;
-                        else  %RMS-multiple threshold --> do mean subtraction
-                            waveform = (double(waveform) - obj.baselineMean(i)) * obj.voltsPerBitNeural;
+                    case 'volts' %apply voltage scaling
+                        if strcmpi(obj.thresholdType,'volts') || stimulusTriggeredWaveformMode 
+                            waveform = double(waveform) * obj.voltsPerBitNeural; 
+                        else
+                            waveform = (double(waveform) - obj.baselineMean(i)) * obj.voltsPerBitNeural; %TODO: verify this mean subtraction is correct for this use case (RMS threshold type, voltage display units, spike-triggered waveform mode), if it arises; it seems to be driven by some practical reality rather than a theoretical necessity
                         end
-                    case 'rmsMultiple'
+                    case 'rmsMultiple' %apply per-channel RMS scaling
+                        % For rmsMultiple display units, mean-subtraction is always applied (via filter or directly here)
                         if obj.filterWindow(1) > 0
                             waveform = double(waveform) / obj.baselineRMS(i);
-                        else %Use mean subtraction
-                            waveform = (double(waveform) - obj.baselineMean(i)) / obj.baselineRMS(i);
+                        else 
+                            waveform = (double(waveform) - obj.baselineMean(i)) / obj.baselineRMS(i); %include mean subtraction
                         end
                 end
                 %Update line object with waveform for current spike
