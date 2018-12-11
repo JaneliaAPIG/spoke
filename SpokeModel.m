@@ -1,6 +1,6 @@
 classdef SpokeModel < most.Model
     %SPIKEGRID Application class for Spoke; all its functionality is implemplemented here
-    % See project wiki for both user & developer overview documentation 
+    % See project wiki for both user & developer overview documentation
     % See end-of-file for nitty-gritty developer notes
     
     
@@ -124,7 +124,7 @@ classdef SpokeModel < most.Model
         hRasterLines; %Cell array of arrays, one per stimEventType, containing animated line objects for each raster plot in grid
         
         numActiveTabs;
-
+        
         %neuralChans; %Acquisition channel numbers corresponding to neural inputs. Ordered as in SpikeGLX connection.
         %auxChans; %Acquisition channel numbers corresponding to auxiliary inputs, i.e. suited for gating/stimulus. These are /not/ displayed. Ordered as in SpikeGLX connection.
         sglChanSubset; %subset of SpikeGLX channels  (includes neural and non-neural channels)
@@ -185,7 +185,7 @@ classdef SpokeModel < most.Model
         partialWaveformBuffer = {}; % Buffer that holds part of a waveform from prior processing period. Used when waveformWrap is true.
         
         verticalRangeCache; % A struct used to persist the last value used for verticalRange in each mode.
-
+        
         % Debug related properties.
         diagramm; %Temporary figure for debugging.
         diagrammm; %Temporary figure 2 for debugging.
@@ -198,7 +198,7 @@ classdef SpokeModel < most.Model
         %Number of logical chans of each of the sub-types available, as configured via the SpikeGLX NI Configuration
         neuralChansAvailable;
         analogMuxChansAvailable;
-        analogSoloChansAvailable;        
+        analogSoloChansAvailable;
     end
     
     properties (SetAccess=protected,Hidden,SetObservable,AbortSet)
@@ -222,7 +222,7 @@ classdef SpokeModel < most.Model
         psthFigPosition; %Figure position of PSTH grid figure
         
         maxPointsPerAnimatedLine; %Used to set the number of max points per animated line.
-                        
+        
         %neuralChanAcqList; %Used to get the number of neural channels (used instead of sglChanSubset, which returns all channels, not just MN chans)
     end
     
@@ -232,7 +232,7 @@ classdef SpokeModel < most.Model
     % ********** NOTES *******
     % 1. Is it possible to change plot order in tab to 2x16 (column)
     % 2. Can we do 2x64?
-    % 3. 
+    % 3.
     
     properties (Hidden,Constant)
         PLOTS_PER_TAB = 32;
@@ -356,21 +356,21 @@ classdef SpokeModel < most.Model
             
             % Read an image
             [img,map] = imread(fullfile(matlabroot, 'toolbox','matlab','icons','matlabicon.gif'));
-
+            
             % Convert image from indexed to truecolor
             icon = ind2rgb(img,map);
-
+            
             obj.hButtons.screenshot = uipushtool(obj.hButtons.toolbar,'TooltipString','Click to Save a Screenshot',...
-                 'ClickedCallback',...
-                 'hGrid.zprvSnapshot');
+                'ClickedCallback',...
+                'hGrid.zprvSnapshot');
             obj.hButtons.pause =  uipushtool(obj.hButtons.toolbar,'TooltipString','Click to Pause or Unpause Operation',...
-                 'ClickedCallback',...
-                 'hGrid.zprvPause');
-
-             % Set the button icon
+                'ClickedCallback',...
+                'hGrid.zprvPause');
+            
+            % Set the button icon
             obj.hButtons.screenshot.CData = icon;
             obj.hButtons.pause.CData = icon;
-             
+            
             %TODO: Use gobjects
             for i=1:numPlots
                 
@@ -433,9 +433,9 @@ classdef SpokeModel < most.Model
             end
             
             obj.displayMode = val;
-
+            
             obj.zprvShowDisplayFig();
-                       
+            
             %Side-effects
             obj.zprvResetReducedData();
             obj.tabDisplayed = obj.tabDisplayed;
@@ -618,21 +618,21 @@ classdef SpokeModel < most.Model
         
         function set.waveformAmpUnits(obj,val)
             obj.validatePropArg('waveformAmpUnits',val);
-
+            
             % Save old value of vertical range to cache.
-            oldVal = obj.waveformAmpUnits;          
+            oldVal = obj.waveformAmpUnits;
             obj.verticalRangeCache.(obj.waveformAmpUnits) = obj.verticalRange;
-
+            
             % Update the property value.
             obj.waveformAmpUnits = val;
-
+            
             % Check to see if cached value exists in struct.
             if isfield(obj.verticalRangeCache,(val))
                 %Restore cached value of vertical range if it exists.
                 obj.verticalRange = obj.verticalRangeCache.(val);
-            end            
+            end
         end
-               
+        
         function val = get.verticalRange(obj)
             val = get(obj.hPlots(1),'YLim');
         end
@@ -641,12 +641,12 @@ classdef SpokeModel < most.Model
             obj.validatePropArg('verticalRange',val);
             
             if strcmpi(obj.waveformAmpUnits,'volts');
-               aiRangeMax = obj.sglParamCache.niAiRangeMax;
-               if any(abs(val) > 1.1 * aiRangeMax)
-                   warning('Specified range exceeded input channel voltage range by greater than 10% -- spike amplitude axis limits clamped');
-                   val = min(val,1.1 * aiRangeMax);
-                   val = max(val,-1.1 * aiRangeMax);
-               end
+                aiRangeMax = obj.sglParamCache.niAiRangeMax;
+                if any(abs(val) > 1.1 * aiRangeMax)
+                    warning('Specified range exceeded input channel voltage range by greater than 10% -- spike amplitude axis limits clamped');
+                    val = min(val,1.1 * aiRangeMax);
+                    val = max(val,-1.1 * aiRangeMax);
+                end
             end
             
             set(obj.hPlots,'YLim',val);
@@ -904,7 +904,7 @@ classdef SpokeModel < most.Model
                 most.idioms.deleteHandle(obj.hChanLabels.psth);
                 
                 hAxes = obj.displayModeAxes;
-
+                
                 for i=1:length(tcn)
                     actualChannelNumber = tcn(i) - 1;
                     if ~isequal(obj.neuralChanDispOrder, obj.neuralChansAvailable)
@@ -1327,7 +1327,7 @@ classdef SpokeModel < most.Model
             
             
         end
-
+        
         function outputChanArray = parseChanMapFile(obj,filename)
             % obj.sglParamCache.snsNiChanMapFile
             fileId = fopen(filename,'r');
@@ -1336,11 +1336,11 @@ classdef SpokeModel < most.Model
             % Assume that the file orders channels 0 to 255. So to create a
             % mapping, just read in the second channel to the mapping
             % array.
-           
+            
             tempInputArray = [];
             inputChanArray = [];
             inputChan=false;
-
+            
             
             tempOutputArray = [];
             outputChanArray = [];
@@ -1350,16 +1350,16 @@ classdef SpokeModel < most.Model
                 % Gate whether we are looking at input channels or output
                 % channels.
                 if tempString(iter) == ' '
-                   outputChan = true;
-                   inputChan = false;
+                    outputChan = true;
+                    inputChan = false;
                 elseif tempString(iter) == ';'
-                   outputChan = false;
-                   inputChan = true;
+                    outputChan = false;
+                    inputChan = true;
                 elseif tempString(iter) == 'M'
                     outputChan = false;
                     inputChan = false;
                 end
-                                
+                
                 % Set up the arrays as necessary.
                 if outputChan
                     if tempString(iter) ~= ' ' && tempString(iter) ~= ';' && ~isletter(tempString(iter))
@@ -1377,17 +1377,17 @@ classdef SpokeModel < most.Model
                     if tempString(iter) ~= ' ' && tempString(iter) ~= ';' && ~isletter(tempString(iter))
                         tempInputArray = [tempInputArray tempString(iter)];
                     end
-                                    
+                    
                     if ~isempty(tempOutputArray) %&& ismember(str2num(tempOutputArray), obj.neuralChansAvailable)
                         if ismember(str2num(tempOutputArray), obj.neuralChansAvailable)
                             outputChanArray = [outputChanArray str2num(tempOutputArray)];
                             tempOutputArray = [];
                         end
                     end
-                end                
+                end
             end
         end
-               
+        
         
         function quit(obj)
             % Delete timer objects.
@@ -1425,7 +1425,7 @@ classdef SpokeModel < most.Model
             try
                 
                 newWaveformWrapVal = [];
-                                
+                
                 t0 = tic;
                 
                 % cnt = GetScanCount(obj.hSGL);
@@ -1501,7 +1501,7 @@ classdef SpokeModel < most.Model
                 if ~isempty(obj.filterCoefficients)
                     [newData(:,1:numNeuralChans),obj.filterCondition] = filter(obj.filterCoefficients{2},obj.filterCoefficients{1},double(newData(:,1:numNeuralChans)),obj.filterCondition); %Convert to double..but still in A/D count values, not voltages
                 end
-
+                
                 
                 %Housekeeping: Form partialWaveformBuffer, appending new data
                 if ~isempty(obj.waveformWrap)
@@ -1561,13 +1561,13 @@ classdef SpokeModel < most.Model
                     znstDetectStimulus(bufStartScanNum);
                 elseif rasterDisplayMode
                     znstDetectStimulus(bufStartScanNum);
-                end                
+                end
                 
                 t4 = toc(t0);
                 
                 %STAGE 5: Data reduction of curent full data batch, storing only needed features (waveform snippets, timestamps, spike-stimulus associations) for subsequent stages & timer periods
-                                
-                %STAGE 5a: (Waveform modes only) Determine and store timestamps & waveform snippets                
+                
+                %STAGE 5a: (Waveform modes only) Determine and store timestamps & waveform snippets
                 % Raster & Spike-triggered Waveform modes: store detected spike scan numbers
                 % Stimulus-triggered Waveform mode: store detected stimulus scan numbers
                 % Waveform modes: store waveform snippets
@@ -1579,8 +1579,8 @@ classdef SpokeModel < most.Model
                 end
                 
                 znstStoreReducedData(timestampOffsets,bufStartScanNum);
-                                
-                %STAGE 5b: (Raster mode only) Determine & store spike-stimulus associations, and stimulus classifications if applicable 
+                
+                %STAGE 5b: (Raster mode only) Determine & store spike-stimulus associations, and stimulus classifications if applicable
                 if rasterDisplayMode
                     if ~isempty(obj.stimScanNums)
                         znstClassifyStimulus(bufStartScanNum); %Classify stimulus event type, if possible
@@ -1588,7 +1588,7 @@ classdef SpokeModel < most.Model
                     chanNewSpikes = znstAssociateSpikesToStimuli(); %Tag spike data with stimulus/event info, as needed/possible
                 end
                 t5 = toc(t0);
-                                                
+                
                 %STAGE 6: Plot newly detected spike(s) that were stored for display - will always be enough post data, and generally enough pre-data except for spikes at very beginning
                 if rasterDisplayMode
                     obj.zprvUpdateRasterPlot(chanNewSpikes);
@@ -1597,13 +1597,13 @@ classdef SpokeModel < most.Model
                 else
                     obj.zprvUpdateWaveformPlot();
                 end
-                                
+                
                 %Housekeeping: Update waveformWrap val, for subsequent timer period
                 if ~isempty(newWaveformWrapVal)
                     obj.waveformWrap(end+1) = newWaveformWrapVal;
                 end
                 
-                t6 = toc(t0);               
+                t6 = toc(t0);
                 
                 %STAGE 7: Update current baseline stats values (mean & RMS), if needed
                 if (rmsMultipleThresh || obj.filterWindow(1) == 0) && ...
@@ -1620,7 +1620,7 @@ classdef SpokeModel < most.Model
                         obj.fullDataBuffer(1:end-max(1,obj.stimEventClassifyNumScans)+1,:) = [];
                     else
                         %Waveform mode: leave only one full horizontalRange (pre+post+1 sample) at the end
-                       % fprintf('obj.horizontalRangeScans: %s\n',sprintf('%d ', obj.horizontalRangeScans));
+                        % fprintf('obj.horizontalRangeScans: %s\n',sprintf('%d ', obj.horizontalRangeScans));
                         obj.fullDataBuffer(1:end-(diff(obj.horizontalRangeScans)+1),:) = [];
                     end
                 catch ME
@@ -1717,7 +1717,7 @@ classdef SpokeModel < most.Model
                 end
                 
                 try
-                   
+                    
                     scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
                     
                     for h=1:numel(obj.neuralChanAcqList)
@@ -1731,7 +1731,7 @@ classdef SpokeModel < most.Model
                         else
                             timestampOffsets_ = timestampOffsets{i};
                         end
-                        numNewTimestamps = length(timestampOffsets_);                                                
+                        numNewTimestamps = length(timestampOffsets_);
                         
                         %In waveform display modes - clear all previous channel data
                         if waveformDisplay
@@ -1825,7 +1825,7 @@ classdef SpokeModel < most.Model
                                 fprintf('yabba dabba doo\n');
                                 fprintf('numNewTimestamps: %d, j: %d, tmpWindow: %s\n',numNewTimestamps, j,sprintf('%d ',tmpWindow));
                                 fprintf('numNewTimestamps: %d, j: %d, waveform: %s\n',numNewTimestamps, j,sprintf('%d ',waveform));
-
+                                
                                 if isempty(obj.diagrammm)
                                     obj.diagrammm = figure('name','temporary plot 2');
                                 end
@@ -1944,7 +1944,7 @@ classdef SpokeModel < most.Model
                 %event-types, if applicable). Update reduced data structure
                 %with these associations. Return (just) the newly
                 %associated spikes, to allow for a fast plot update.
-                                
+                
                 for i=1:length(obj.stimEventTypes_)
                     chanNewSpikes.(obj.stimEventTypes_{i}) = zeros(numNeuralChans,1);
                 end
@@ -2126,18 +2126,18 @@ classdef SpokeModel < most.Model
                 
                 [newSpikeScanNums, obj.maxNumWaveformsApplied] = ...
                     zlclDetectSpikes(obj.reducedData, ...
-                                     obj.fullDataBuffer, ...
-                                     bufStartScanNum, ...
-                                     round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate), ...
-                                     threshVal, ...
-                                     obj.thresholdAbsolute, ...
-                                     threshMean, ...
-                                     obj.refreshPeriodMaxNumWaveforms, ...
-                                     obj.sglChanSubset, ...
-                                     obj.neuralChanAcqList, ...
-                                     obj.horizontalRangeScans, ...
-                                     obj.debug, ...
-                                     obj.diagramm); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+                    obj.fullDataBuffer, ...
+                    bufStartScanNum, ...
+                    round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate), ...
+                    threshVal, ...
+                    obj.thresholdAbsolute, ...
+                    threshMean, ...
+                    obj.refreshPeriodMaxNumWaveforms, ...
+                    obj.sglChanSubset, ...
+                    obj.neuralChanAcqList, ...
+                    obj.horizontalRangeScans, ...
+                    obj.debug, ...
+                    obj.diagramm); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
                 
                 %             if maxNumWaveformsApplied && ~obj.maxNumWaveformsApplied
                 %               fprintf(2,'WARNING: Exceeded maximum number of spikes (%d) on one or more channels; subsequent spikes were ignored.\n', obj.refreshPeriodMaxNumWaveforms);
@@ -2149,18 +2149,18 @@ classdef SpokeModel < most.Model
                 threshVal = obj.thresholdVal / obj.voltsPerBitNeural; %Convert to AD units
                 threshMean = 0; %Don't do mean subtraction
                 newSpikeScanNums = zlclDetectSpikes(obj.reducedData, ...
-                                                    obj.fullDataBuffer, ...
-                                                    bufStartScanNum, ...
-                                                    round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate), ...
-                                                    threshVal, ...
-                                                    obj.thresholdAbsolute, ...
-                                                    0, ...
-                                                    obj.refreshPeriodMaxNumWaveforms, ...
-                                                    obj.sglChanSubset, ...
-                                                    obj.neuralChanAcqList, ...
-                                                    obj.horizontalRangeScans, ...
-                                                    obj.debug, ...
-                                                    obj.diagramm); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+                    obj.fullDataBuffer, ...
+                    bufStartScanNum, ...
+                    round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate), ...
+                    threshVal, ...
+                    obj.thresholdAbsolute, ...
+                    0, ...
+                    obj.refreshPeriodMaxNumWaveforms, ...
+                    obj.sglChanSubset, ...
+                    obj.neuralChanAcqList, ...
+                    obj.horizontalRangeScans, ...
+                    obj.debug, ...
+                    obj.diagramm); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
             end
             
         end
@@ -2335,10 +2335,10 @@ classdef SpokeModel < most.Model
         function zprvUpdateWaveformPlot(obj)
             
             totalNewWaveforms = 0;
-
+            
             stimulusMode = ~isempty(obj.stimStartChannel) && ~isempty(obj.stimStartThreshold);
             stimulusTriggeredWaveformMode = strcmpi(obj.displayMode,'waveform') && stimulusMode;
-
+            
             %totalClearedSpikes = 0;
             for i=obj.tabChanNumbers
                 if isempty(obj.reducedData{i})
@@ -2393,13 +2393,13 @@ classdef SpokeModel < most.Model
                 if isempty(waveform)
                     return;
                 end
-                assert(length(waveform) == length(xData),'Waveform data for chan %d (%d), spike %d not of expected length (%d)\n',i,length(waveform),j,length(xData));             
+                assert(length(waveform) == length(xData),'Waveform data for chan %d (%d), spike %d not of expected length (%d)\n',i,length(waveform),j,length(xData));
                 
                 %Scale waveform from A/D units to target units.
                 switch obj.waveformAmpUnits
                     case 'volts' %apply voltage scaling
-                        if strcmpi(obj.thresholdType,'volts') || stimulusTriggeredWaveformMode 
-                            waveform = double(waveform) * obj.voltsPerBitNeural; 
+                        if strcmpi(obj.thresholdType,'volts') || stimulusTriggeredWaveformMode
+                            waveform = double(waveform) * obj.voltsPerBitNeural;
                         else
                             waveform = (double(waveform) - obj.baselineMean(i)) * obj.voltsPerBitNeural; %TODO: verify this mean subtraction is correct for this use case (RMS threshold type, voltage display units, spike-triggered waveform mode), if it arises; it seems to be driven by some practical reality rather than a theoretical necessity
                         end
@@ -2407,7 +2407,7 @@ classdef SpokeModel < most.Model
                         % For rmsMultiple display units, mean-subtraction is always applied (via filter or directly here)
                         if obj.filterWindow(1) > 0
                             waveform = double(waveform) / obj.baselineRMS(i);
-                        else 
+                        else
                             waveform = (double(waveform) - obj.baselineMean(i)) / obj.baselineRMS(i); %include mean subtraction
                         end
                 end
@@ -2465,7 +2465,6 @@ classdef SpokeModel < most.Model
             handlesToClear = [obj.hThresholdLines{1}(isgraphics(obj.hThresholdLines{1})); obj.hThresholdLines{2}(isgraphics(obj.hThresholdLines{2}))];
             %set(handlesToClear,'EraseMode','normal');
             delete(handlesToClear);
-            
             %Compute all-channel threshold; determine lack of threshold val -- as applicable
             perChanThreshold = ~strcmpi(obj.thresholdType,obj.waveformAmpUnits);
             if perChanThreshold %RMS threshold with voltage units -- this is only mismatch type presently allowed
@@ -2509,7 +2508,6 @@ classdef SpokeModel < most.Model
                 end
                 
             end
-            
         end
         
         function zprvResetAcquisition(obj,fileRollover)
@@ -2769,7 +2767,7 @@ classdef SpokeModel < most.Model
                 end
             end
         end
-
+        
         function zprvSnapshot(obj)
             numPlots = obj.PLOTS_PER_TAB;
             
@@ -2857,11 +2855,11 @@ for h=1:numel(chanSubset)
     %of data. If this value is too small, then there won't be any data in a
     %portion of the user's display.
     
-    currIdx = abs(horizontalRangeScans(1)); %Index into fullDataBuffer. 
+    currIdx = abs(horizontalRangeScans(1)); %Index into fullDataBuffer.
     % NOTE: If currIdx is initialized to 1, it will begin spike detection at the very start of the fullDataBuffer.
-    % Doing because it will detect as many spikes as possible. The downside is that it may detect a spike with no 
+    % Doing because it will detect as many spikes as possible. The downside is that it may detect a spike with no
     % waveform data in the native part of the time window.
-        
+    
     while currIdx < scansToSearch
         %fprintf('currIdx: %d scansToSearch: %d postSpikeNumScans: %d\n',currIdx,scansToSearch,postSpikeNumScans);
         %Find at most one spike (threshold crossing) in the fullDataBuffer
@@ -2879,7 +2877,7 @@ for h=1:numel(chanSubset)
             break;
         else
             spikesFound = spikesFound + 1;
-
+            
             if spikesFound > maxNumSpikes
                 maxNumWaveformsApplied = true;
                 break;
@@ -2887,7 +2885,7 @@ for h=1:numel(chanSubset)
         end
         
         nextSpikeScanNum = bufStartScanNum + nextSpikeIdx - 1;
-
+        
         %Add new spike, if not added already
         if ~ismember(nextSpikeScanNum,recentSpikeScanNums)
             %Note: fullDataBuffer is in "local" space. This means that it
@@ -2907,69 +2905,69 @@ for h=1:numel(chanSubset)
             spikesFoundPerChan(i) = spikesFoundPerChan(i) + 1;
             
         end
-
+        
         %Impose refractory period
         currIdx = nextSpikeIdx + postSpikeNumScans; %Will start with final scan of the post-spike-window...to use as first scan for next diff operation (first element never selected)
     end
     
-end 
-    if debug
-        % *********************************************************************
-        % ****************************** DEBUG ********************************
-        % *********************************************************************
-        buffersize = size(fullDataBuffer,1);
-
-        if ~isempty(localspikes{1})
-            if max(fullDataBuffer(1:buffersize,1)) > thresholdVal(1)
-                tempbuffer = zeros(1,buffersize);
-                figure(diagramm);
-                cla;
-                % *********************************************************************
-                % boundschecking
-                % *********************************************************************
-                beginplot = (localspikes{1}(1)-500);
-                endplot = (localspikes{1}(end)+500);
-                for iter = 1:numel(localspikes{1})
-                    spikelocation(iter) = localspikes{1}(iter);
-                end
-                fprintf('beginplot: %d, endplot: %d, spikeLocation: %d, localspikes: %s \n',beginplot,endplot,spikelocation,sprintf('%d ',localspikes{1}));
-
-                if beginplot < 1
-                    beginplot = 1;
-                end
-                if endplot > buffersize
-                    endplot = buffersize;
-                end
-                % *********************************************************************
-                % boundschecking
-                % *********************************************************************
-
-                tempbuffer(beginplot:endplot) = fullDataBuffer(beginplot:endplot,1);
-
-                xlim manual;
-                xlim([0 buffersize]);
-                ylim manual;
-                ylim([0,thresholdVal(1)+500]);
-                hold on;
-
-                text(10,4000,sprintf('beginplot: %d',beginplot));
-                text(10,3300,sprintf('endplot: %d',endplot));
-                text(10,2600,sprintf('spikelocation: %d',spikelocation));
-                text(10,1900,sprintf('localspikes: %s',sprintf('%d ',localspikes{1})));
-                plot(tempbuffer);
-                plot(thresholdVal(1)*ones(1,buffersize));
-
-                for iter = 1:numel(localspikes{1})
-                    line([spikelocation(iter) spikelocation(iter)],get(gca, 'ylim'),'Color','red','LineStyle','--')
-                end
-                
-                hold off;
+end
+if debug
+    % *********************************************************************
+    % ****************************** DEBUG ********************************
+    % *********************************************************************
+    buffersize = size(fullDataBuffer,1);
+    
+    if ~isempty(localspikes{1})
+        if max(fullDataBuffer(1:buffersize,1)) > thresholdVal(1)
+            tempbuffer = zeros(1,buffersize);
+            figure(diagramm);
+            cla;
+            % *********************************************************************
+            % boundschecking
+            % *********************************************************************
+            beginplot = (localspikes{1}(1)-500);
+            endplot = (localspikes{1}(end)+500);
+            for iter = 1:numel(localspikes{1})
+                spikelocation(iter) = localspikes{1}(iter);
             end
-        end    
+            fprintf('beginplot: %d, endplot: %d, spikeLocation: %d, localspikes: %s \n',beginplot,endplot,spikelocation,sprintf('%d ',localspikes{1}));
+            
+            if beginplot < 1
+                beginplot = 1;
+            end
+            if endplot > buffersize
+                endplot = buffersize;
+            end
+            % *********************************************************************
+            % boundschecking
+            % *********************************************************************
+            
+            tempbuffer(beginplot:endplot) = fullDataBuffer(beginplot:endplot,1);
+            
+            xlim manual;
+            xlim([0 buffersize]);
+            ylim manual;
+            ylim([0,thresholdVal(1)+500]);
+            hold on;
+            
+            text(10,4000,sprintf('beginplot: %d',beginplot));
+            text(10,3300,sprintf('endplot: %d',endplot));
+            text(10,2600,sprintf('spikelocation: %d',spikelocation));
+            text(10,1900,sprintf('localspikes: %s',sprintf('%d ',localspikes{1})));
+            plot(tempbuffer);
+            plot(thresholdVal(1)*ones(1,buffersize));
+            
+            for iter = 1:numel(localspikes{1})
+                line([spikelocation(iter) spikelocation(iter)],get(gca, 'ylim'),'Color','red','LineStyle','--')
+            end
+            
+            hold off;
+        end
     end
-    % *********************************************************************
-    % ****************************** DEBUG ********************************    
-    % *********************************************************************
+end
+% *********************************************************************
+% ****************************** DEBUG ********************************
+% *********************************************************************
 end
 
 function s = zlclInitPropAttributes()
