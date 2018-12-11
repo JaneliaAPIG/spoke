@@ -2334,7 +2334,10 @@ classdef SpokeModel < most.Model
         function zprvUpdateWaveformPlot(obj)
             
             totalNewWaveforms = 0;
-            
+
+            stimulusMode = ~isempty(obj.stimStartChannel) && ~isempty(obj.stimStartThreshold);
+            stimulusTriggeredWaveformMode = strcmpi(obj.displayMode,'waveform') && stimulusMode;
+
             %totalClearedSpikes = 0;
             for i=obj.tabChanNumbers
                 if isempty(obj.reducedData{i})
@@ -2374,7 +2377,13 @@ classdef SpokeModel < most.Model
                         znstPlotWaveform(obj.reducedData{i}.waveforms{j});
                     end
                 end
+                
+                
             end
+            
+if totalNewWaveforms > 0            
+fprintf('Plot 1 mean: %d\n',mean(obj.reducedData{1}.waveforms{1}));
+end
             
             %Clear oldest partial waveforms stored, now that they're plotted
             if ~isempty(obj.waveformWrap)
@@ -2388,10 +2397,11 @@ classdef SpokeModel < most.Model
                 end
                 assert(length(waveform) == length(xData),'Waveform data for chan %d (%d), spike %d not of expected length (%d)\n',i,length(waveform),j,length(xData));             
                 
-                %Scale waveform from A/D units to target units, applying mean subtraction if thresholdType='rmsMultiple'
+                %Scale waveform from A/D units to target units.
+                %If in spike-triggered waveform mode, apply mean subtraction if thresholdType='rmsMultiple' (TODO: confirm/comment on why this is needed)
                 switch obj.waveformAmpUnits
                     case 'volts'
-                        if strcmpi(obj.thresholdType,'volts') %no mean subtraction...just show as is
+                        if strcmpi(obj.thresholdType,'volts') || stimulusTriggeredWaveformMode %no mean subtraction...just show as is
                             waveform = double(waveform) * obj.voltsPerBitNeural;
                         else  %RMS-multiple threshold --> do mean subtraction
                             waveform = (double(waveform) - obj.baselineMean(i)) * obj.voltsPerBitNeural;
