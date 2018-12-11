@@ -103,6 +103,7 @@ classdef SpokeModel < most.Model
     properties (Hidden,SetAccess=protected)
         hSGL; %Handle to SpikeGLX object
         sglParamCache; %cached SpikeGLX parameters
+        sglDeviceFcns; %cached SpikeGLX function handles
         
         hTimer; %Timer to use for periodically checking Spoke's input data stream
         hPSTHTimer; %Timer to periodically call plotPSTH() method
@@ -254,14 +255,31 @@ classdef SpokeModel < most.Model
             obj.hSGL = SpikeGL(sglIPAddress);
             
             obj.sglParamCache = GetParams(obj.hSGL); %initialize SpikeGL param cache
-            
+
             %Create class-data file
             s.lastConfigFileName = '';
             obj.ensureClassDataFile(s,mfilename('class'));
-            
             %Initialize resources
             obj.ziniCreateGrids(); %Create spike waveform grid figure
             
+            if isequal(obj.sglParamCache.imEnabled,'true') && isequal(obj.sglParamCache.niEnabled,'true')
+                   fprintf(2,'Currently only supporting either Ni or Imec mode, but not both.');
+                   delete(obj);
+                   return
+            elseif isequal(obj.sglParamCache.niEnabled,'true')
+                niORim = 'Ni';
+            elseif isequal(obj.sglParamCache.imEnabled,'true')
+                niORim = 'Im';
+            else
+                assert(false);
+                delete(obj);
+                return
+            end
+            
+            obj.sglDeviceFcns.Fetch = str2func(['@Fetch' niORim]);
+            obj.sglDeviceFcns.GetSaveChans = str2func(['@GetSaveChans' niORim]);
+            obj.sglDeviceFcns.GetScanCount = str2func(['@GetScanCount' niORim]);
+
             obj.hTimer = timer('Name','Spoke Waveform Grid Timer','ExecutionMode','fixedRate','TimerFcn',@obj.zcbkTimerFcn,'BusyMode','queue','StartDelay',0.1);
             obj.hPSTHTimer = timer('Name','Spoke Plot PSTH Timer','ExecutionMode','fixedRate','TimerFcn',@(src,evnt)obj.plotPSTH,'BusyMode','drop','StartDelay',0.1);
             
@@ -1430,7 +1448,7 @@ classdef SpokeModel < most.Model
                 
                 % cnt = GetScanCount(obj.hSGL);
                 
-                cnt = GetScanCountNi(obj.hSGL);
+                cnt = obj.sglDeviceFcns.GetScanCount(obj.hSGL);
                 
                 %Use current scan number as reference scan number on first timer entry following start/restart
                 if ismember(obj.bufScanNumEnd,[0 -1])
@@ -1486,7 +1504,7 @@ classdef SpokeModel < most.Model
                 %STAGE 1: Read newly available data
                 %[scansToRead, newData] = znstReadAvailableData(obj.maxReadableScanNum-obj.priorfileMaxReadableScanNum-scansToRead,scansToRead); %obj.bufScanNumEnd will be 0 in case of file-rollover or SpikeGL stop/restart
                 %                 newData = GetDAQData(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglChanSubset);
-                newData = FetchNi(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglChanSubset);
+                newData = obj.sglDeviceFcns.Fetch(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglChanSubset);
                 obj.lastMaxReadableScanNum = obj.lastMaxReadableScanNum + scansToRead;
                 t1 = toc(t0);
                 
@@ -2751,7 +2769,7 @@ classdef SpokeModel < most.Model
                 obj.neuralChanDispOrder = parseChanMapFile(obj,obj.sglParamCache.snsNiChanMapFile);
             end
             
-            obj.sglChanSubset = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
+            obj.sglChanSubset = obj.sglDeviceFcns.GetSaveChans(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
             
             obj.neuralChanAcqList = intersect(obj.sglChanSubset,obj.neuralChansAvailable);
             obj.neuralChanDispList = obj.neuralChanDispOrder; %TODO: Apply subsetting to neuralChanDispOrder - ed: I thought subsets were displayed in strict channel order - what would change in the display due to subsetting?
