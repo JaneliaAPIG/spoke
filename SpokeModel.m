@@ -1499,8 +1499,9 @@ classdef SpokeModel < most.Model
                 
                 %STAGE 3: Filter data if needed. Also: housekeeping to form fullDataBuffer & partialWaveformBuffer for subsequent processing stages.
                 if ~isempty(obj.filterCoefficients)
-                    [newData(1:numNeuralChans),obj.filterCondition] = filter(obj.filterCoefficients{2},obj.filterCoefficients{1},double(newData(1:numNeuralChans)),obj.filterCondition); %Convert to double..but still in A/D count values, not voltages
+                    [newData(:,1:numNeuralChans),obj.filterCondition] = filter(obj.filterCoefficients{2},obj.filterCoefficients{1},double(newData(:,1:numNeuralChans)),obj.filterCondition); %Convert to double..but still in A/D count values, not voltages
                 end
+
                 
                 %Housekeeping: Form partialWaveformBuffer, appending new data
                 if ~isempty(obj.waveformWrap)
