@@ -126,9 +126,7 @@ classdef SpokeModel < most.Model
         
         numActiveTabs;
         
-        %neuralChans; %Acquisition channel numbers corresponding to neural inputs. Ordered as in SpikeGLX connection.
-        %auxChans; %Acquisition channel numbers corresponding to auxiliary inputs, i.e. suited for gating/stimulus. These are /not/ displayed. Ordered as in SpikeGLX connection.
-        sglChanSubset; %subset of SpikeGLX channels  (includes neural and non-neural channels)
+        sglSaveChans; %SpikeGLX save channels. These are the channels (both neural and non-neural channels) that SpikeGLX both saves and transfers to Spoke.
         
         neuralChanDispOrder; %Order in which neuralChans should be displayed. Includes all acquired neural chans, whether included in subset or not.
         
@@ -222,9 +220,7 @@ classdef SpokeModel < most.Model
         gridFigPosition; %Figure position of raster/waveform grid figures (same position for both..only one shown at a time)
         psthFigPosition; %Figure position of PSTH grid figure
         
-        maxPointsPerAnimatedLine; %Used to set the number of max points per animated line.
-        
-        %neuralChanAcqList; %Used to get the number of neural channels (used instead of sglChanSubset, which returns all channels, not just MN chans)
+        maxPointsPerAnimatedLine; %Used to set the number of max points per animated line.        
     end
     
     %Constants
@@ -299,7 +295,7 @@ classdef SpokeModel < most.Model
             obj.zprvResetReducedData();
             
             %Initialize a default display for appearances (some aspects gets overridden by processing on start())
-            obj.zprvApplyChanOrderAndSubset();
+            obj.zprvApplySaveChansAndChanMap();
             
             numNeuralChans = numel(obj.neuralChansAvailable);
             obj.hThresholdLines = repmat({ones(numNeuralChans,1) * -1},2,1);
@@ -568,16 +564,7 @@ classdef SpokeModel < most.Model
         function val = get.refreshPeriodAvgScans(obj)
             val = round(get(obj.hTimer,'Period') * obj.sglParamCache.niSampRate);
         end
-        %
-        %         function val = get.neuralChanAcqList(obj)
-        %             % obj.sglChanSubset does not discriminate between neural, aux, and other types of channels.
-        %             % return obj.sglChanSubset's neural chans only. hGrid.sglParamCache.niMNChans1, hGrid.sglParamCache.niMNChans2
-        %             lclMNChans = str2num(num2str(obj.sglParamCache.niMNChans1));
-        %             lclChanLim = (max(lclMNChans) + 1) * obj.sglParamCache.niMuxFactor; % DO NOT HARDCODE THIS TO NUMBER OF WAVEFORMS PER TAB.
-        %             %val = obj.sglChanSubset;
-        %             val = obj.sglChanSubset(obj.sglChanSubset < lclChanLim);
-        %         end
-        
+
         function set.refreshRate(obj,val)
             obj.zprpAssertNotRunning('refreshRate');
             obj.validatePropArg('refreshRate',val);
@@ -705,7 +692,7 @@ classdef SpokeModel < most.Model
             end
         end
         
-        %         function val = get.sglChanSubset(obj)
+        %         function val = get.sglSaveChans(obj)
         %              val = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
         %         end
         
@@ -1061,7 +1048,7 @@ classdef SpokeModel < most.Model
             %Apply channel ordering & subsetting, if specified in SpikeGLX
             %TODO: Consider to allow further subsetting by Spoke user, to give faster Spoke processing
             obj.zprvAssertAvailChansConstant();
-            obj.zprvApplyChanOrderAndSubset();
+            obj.zprvApplySaveChansAndChanMap();
             
             %Reset various state vars -- RMS/mean, filterCondition, spike data, etc
             obj.zprvResetAcquisition();
@@ -1501,15 +1488,15 @@ classdef SpokeModel < most.Model
                 
                 %STAGE 1: Read newly available data
                 %[scansToRead, newData] = znstReadAvailableData(obj.maxReadableScanNum-obj.priorfileMaxReadableScanNum-scansToRead,scansToRead); %obj.bufScanNumEnd will be 0 in case of file-rollover or SpikeGL stop/restart
-                %                 newData = GetDAQData(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglChanSubset);
-                newData = obj.sglDeviceFcns.Fetch(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglChanSubset);
+                %                 newData = GetDAQData(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglSaveChans);
+                newData = obj.sglDeviceFcns.Fetch(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglSaveChans);
                 obj.lastMaxReadableScanNum = obj.lastMaxReadableScanNum + scansToRead;
                 t1 = toc(t0);
                 
                 %STAGE 2: Apply global mean subtraction, if applicable. Applies only to neural channels. TODO: Restrict to displayed channels
                 if obj.globalMeanSubtraction
                     newData(:,1:numNeuralChans) = newData(:,1:numNeuralChans) - mean(mean(newData(:,1:numNeuralChans)));
-                    %newData(:,1:obj.sglChanSubset) = newData(:,1:obj.sglChanSubset) - mean(mean(newData(:,1:obj.sglChanSubset)));
+                    %newData(:,1:obj.sglSaveChans) = newData(:,1:obj.sglSaveChans) - mean(mean(newData(:,1:obj.sglSaveChans)));
                 end
                 t2 = toc(t0);
                 
@@ -1522,7 +1509,7 @@ classdef SpokeModel < most.Model
                 %Housekeeping: Form partialWaveformBuffer, appending new data
                 if ~isempty(obj.waveformWrap)
                     for hiter=1:numel(obj.neuralChanAcqList)
-                        iter = obj.sglChanSubset(hiter)+1;
+                        iter = obj.sglSaveChans(hiter)+1;
                         obj.partialWaveformBuffer{end, iter} = [obj.partialWaveformBuffer{end, iter};newData(1:obj.waveformWrap(end),iter)];
                     end
                 end
@@ -1737,7 +1724,7 @@ classdef SpokeModel < most.Model
                     scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
                     
                     for h=1:numel(obj.neuralChanAcqList)
-                        i = obj.sglChanSubset(h)+1;
+                        i = obj.sglSaveChans(h)+1;
                         %TODO: Where possible, short-circuit storage for
                         %channels not being displayed, to reduce processing
                         %time
@@ -1895,7 +1882,7 @@ classdef SpokeModel < most.Model
                 
                 %Detect & record stimulus start and associated stimulus window
                 %                stimIdx = find(diff(obj.fullDataBuffer(reducedDataBufStartIdx:end,obj.stimStartChannel + 1) > (obj.stimStartThreshold / obj.voltsPerBitNeural)) == 1, 1); %Should not have off-by-one error -- lowest possible value is fullDataBufferStartIdx+1 (if the second sample crosses threshold)
-                stimChanFullDataIdx = find(obj.sglChanSubset==obj.stimStartChannel);
+                stimChanFullDataIdx = find(obj.sglSaveChans==obj.stimStartChannel);
                 % stimIdx = find(diff(obj.fullDataBuffer(reducedDataBufStartIdx:end,stimChanFullDataIdx) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1, 1); %Should not have off-by-one error -- lowest possible value is fullDataBufferStartIdx+1 (if the second sample crosses threshold)
                 %  stimIdx = find(diff(obj.fullDataBuffer(reducedDataBufStartIdx:end,stimChanFullDataIdx)) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1; %Should not have off-by-one error -- lowest possible value is fullDataBufferStartIdx+1 (if the second sample crosses threshold)
                 triggerThreshVal = obj.stimStartThreshold / obj.voltsPerBitAux;
@@ -1969,10 +1956,8 @@ classdef SpokeModel < most.Model
                 
                 taggedSpikeIdxStructInit = cell2struct(repmat({[]},length(obj.stimEventTypes_),1),obj.stimEventTypes_);
                 
-                %                 for c=1:numNeuralChans
-                %for b=1:numel(obj.sglChanSubset) % EDKANG
-                for b=1:numel(obj.neuralChanAcqList)        % EDKANG
-                    c=obj.sglChanSubset(b) + 1; % EDKANG
+                for b=1:numel(obj.neuralChanAcqList)
+                    c=obj.sglSaveChans(b) + 1; 
                     
                     taggedNewSpike = false;
                     spikesToClear = [];
@@ -2061,8 +2046,6 @@ classdef SpokeModel < most.Model
                 firstPassMode = isempty(newSpikeScanNums); %Handle first pass at RMS detection, when there are no detected spikes yet
                 
                 if ~firstPassMode
-                    %for i=1:numNeuralChans
-                    %for i=1:numel(obj.sglChanSubset)
                     for i=1:numel(obj.neuralChanAcqList)
                         %newRmsData{i} = obj.fullDataBuffer(1:end-obj.horizontalRangeScans(2),i);
                         %batchLength(i) = length(newRmsData{i});
@@ -2088,7 +2071,6 @@ classdef SpokeModel < most.Model
                 
                 % Update mean & RMS computation for each pad channel
                 warnNoData = false;
-                %for i=1:numNeuralChans
                 for i=1:numel(obj.neuralChanAcqList)
                     if isempty(rmsDataIdxs{i})
                         if ~warnNoData
@@ -2149,7 +2131,7 @@ classdef SpokeModel < most.Model
                     obj.thresholdAbsolute, ...
                     threshMean, ...
                     obj.refreshPeriodMaxNumWaveforms, ...
-                    obj.sglChanSubset, ...
+                    obj.sglSaveChans, ...
                     obj.neuralChanAcqList, ...
                     obj.horizontalRangeScans, ...
                     obj.debug, ...
@@ -2172,7 +2154,7 @@ classdef SpokeModel < most.Model
                     obj.thresholdAbsolute, ...
                     0, ...
                     obj.refreshPeriodMaxNumWaveforms, ...
-                    obj.sglChanSubset, ...
+                    obj.sglSaveChans, ...
                     obj.neuralChanAcqList, ...
                     obj.horizontalRangeScans, ...
                     obj.debug, ...
@@ -2571,7 +2553,7 @@ classdef SpokeModel < most.Model
             
             obj.reducedData = cell(numNeuralChans,1);
             for i=1:1:numNeuralChans
-                %for i=1:1:numel(obj.sglChanSubset)
+                %for i=1:1:numel(obj.sglSaveChans)
                 if strcmpi(obj.displayMode,'waveform')
                     obj.reducedData{i} = struct('scanNums',[],'waveforms',{{}});
                 else
@@ -2757,7 +2739,7 @@ classdef SpokeModel < most.Model
             
         end
         
-        function zprvApplyChanOrderAndSubset(obj)
+        function zprvApplySaveChansAndChanMap(obj)
             
             if isempty(obj.sglParamCache.snsNiChanMapFile)
                 fprintf('Channel Remapping: no snsNiChanMapFile defined in SpikeGLX, defaulting to standard mapping...\n');
@@ -2767,11 +2749,11 @@ classdef SpokeModel < most.Model
                 obj.neuralChanDispOrder = parseChanMapFile(obj,obj.sglParamCache.snsNiChanMapFile);
             end
             
-            obj.sglChanSubset = obj.sglDeviceFcns.GetSaveChans(obj.hSGL); %channel subset as specified in SpikeGLX.
+            obj.sglSaveChans = obj.sglDeviceFcns.GetSaveChans(obj.hSGL); %save channels as specified in SpikeGLX.
             
-            obj.neuralChanAcqList = intersect(obj.sglChanSubset,obj.neuralChansAvailable);
-            obj.neuralChanDispList = obj.neuralChanDispOrder; %TODO: Apply subsetting to neuralChanDispOrder - ed: I thought subsets were displayed in strict channel order - what would change in the display due to subsetting?
-            obj.auxChanProcList = [obj.analogMuxChansAvailable obj.analogSoloChansAvailable];
+            obj.neuralChanAcqList = intersect(obj.sglSaveChans,obj.neuralChansAvailable);
+            obj.neuralChanDispList = obj.neuralChanDispOrder; %TODO: determine is any extra transformation needed here (e.g. combining Save Chan information and Channel Map information)? As is, this is a no-op.
+            obj.auxChanProcList = [obj.analogMuxChansAvailable obj.analogSoloChansAvailable]; %TODO: determine if any extra processing is required here 
         end
         
         function zprvInitializeRasterGridLines(obj)
@@ -2819,7 +2801,7 @@ end
 
 
 %% LOCAL FUNCTIONS
-function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedData,fullDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,baselineMean,maxNumSpikes,sglChanSubset,chanSubset, horizontalRangeScans, debug, diagramm)
+function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedData,fullDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,baselineMean,maxNumSpikes,sglSaveChans,chanSubset, horizontalRangeScans, debug, diagramm)
 %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
 %
 % reducedData: Cell array, one element per channel, containing data for each detected spike (from earlier timer callback period(s))
@@ -2854,7 +2836,7 @@ localspikes = cell(numel(chanSubset),1);
 
 %for i=1:numNeuralChans
 for h=1:numel(chanSubset)
-    i = sglChanSubset(h)+1;
+    i = sglSaveChans(h)+1;
     
     %Determine recent (already detected) spike scan numbers to exclude from spike search
     lastSpikeScanNumIdx = find(reducedData{i}.scanNums < bufStartScanNum,1,'last');
