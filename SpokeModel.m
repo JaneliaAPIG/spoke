@@ -2518,7 +2518,7 @@ classdef SpokeModel < most.Model
             
             nnca = numel(obj.neuralChanAcqList);
             
-            obj.fullDataBuffer = zeros(0,numel(obj.neuralChanDispList) + numel(obj.auxChanProcList));
+            obj.fullDataBuffer = zeros(0, numel(obj.sglSaveChans));
             
             if ~fileRollover %&& strcmpi(obj.thresholdType,'rmsMultiple')
                 obj.baselineRMS = zeros(nnca,1);
