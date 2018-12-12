@@ -130,9 +130,9 @@ classdef SpokeModel < most.Model
         
         neuralChanDispOrder; %Order in which neuralChans should be displayed. Includes all acquired neural chans, whether included in subset or not.
         
-        neuralChanAcqList; %Ascending list of neural chans within SpikeGLX save chans (sglSaveChans).
-        neuralChanDispList; %Ordered list of neural chans within SpikeGLX save chans (sglSaveChans), specifying display ordering. 
-        auxChanProcList; %Ascending list of auxiliary chans (TOCHECK: restricted to within SpikeGLX save chans?)
+        neuralChanAcqList; % List of neural chans included in SpikeGLX chan subset
+        neuralChanDispList; %Ordered list of neural chans displayed. Display ordering applied. Channel subset, if any, is applied.
+        auxChanProcList; %List of auxiliary chans processed. Channel subset, if any, is applied.
         
         baselineRMS; %Array of RMS values, one per channel, computed from all non-spike-window scans from within last baselineRMSTime
         baselineMean; %Array of mean values, one per channel, computed from all non-spike-window scans from within last baselineRMSTime
@@ -297,11 +297,11 @@ classdef SpokeModel < most.Model
             %Initialize a default display for appearances (some aspects gets overridden by processing on start())
             obj.zprvApplySaveChansAndChanMap();
             
-            nnca = numel(obj.neuralChansAvailable);
-            obj.hThresholdLines = repmat({ones(nnca,1) * -1},2,1);
+            numNeuralChans = numel(obj.neuralChansAvailable);
+            obj.hThresholdLines = repmat({ones(numNeuralChans,1) * -1},2,1);
             
             %Allocate spike waveforms & raster plots
-            obj.hWaveforms = gobjects(nnca,1);
+            obj.hWaveforms = gobjects(numNeuralChans,1);
             for i=1:obj.PLOTS_PER_TAB
                 obj.hWaveforms(i) = animatedline('Parent',obj.hPlots(i),'Color','k','MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','-');
             end
@@ -339,9 +339,9 @@ classdef SpokeModel < most.Model
         
         function ziniCreateGrids(obj)
             
-            nnca = numel(obj.neuralChansAvailable);
+            numNeuralChans = numel(obj.neuralChansAvailable);
             
-            obj.numActiveTabs = ceil(nnca/obj.PLOTS_PER_TAB);
+            obj.numActiveTabs = ceil(numNeuralChans/obj.PLOTS_PER_TAB);
             assert(obj.numActiveTabs <= obj.MAX_NUM_TABS,'Exceeded maximum number of tabs (%d)',obj.MAX_NUM_TABS); %TODO: Deal more gracefully
             
             %This is a good idea...but let's keep it simple for now
@@ -546,8 +546,8 @@ classdef SpokeModel < most.Model
         end
         
         function val = get.numTabs(obj)
-            nnca = numel(obj.neuralChansAvailable);
-            val = ceil(nnca/obj.PLOTS_PER_TAB);
+            numNeuralChans = numel(obj.neuralChansAvailable);
+            val = ceil(numNeuralChans/obj.PLOTS_PER_TAB);
         end
         
         function val = get.refreshPeriodMaxNumWaveforms(obj)
@@ -889,10 +889,10 @@ classdef SpokeModel < most.Model
                 dispType = obj.displayMode;
                 
                 %Update tabChanNumbers
-                nnca = numel(obj.neuralChansAvailable); %#ok<*MCSUP>
+                numNeuralChans = numel(obj.neuralChansAvailable); %#ok<*MCSUP>
                 
                 tcn = (1:obj.PLOTS_PER_TAB) + (val-1)*obj.PLOTS_PER_TAB;
-                tcn(tcn > nnca) = [];
+                tcn(tcn > numNeuralChans) = [];
                 obj.tabChanNumbers = tcn; %One-based channel index
                 
                 %Clear grid waveform/raster plots
@@ -1442,7 +1442,7 @@ classdef SpokeModel < most.Model
                 end
                 
                 numNeuralChans = numel(obj.neuralChansAvailable);
-
+                
                 rmsMultipleThresh = strcmpi(obj.thresholdType,'rmsMultiple');
                 rmsMultipleInitializing = rmsMultipleThresh && obj.baselineRMSLastScan == 0;
                 
@@ -1491,15 +1491,14 @@ classdef SpokeModel < most.Model
                 
                 %STAGE 2: Apply global mean subtraction, if applicable. Applies only to neural channels. TODO: Restrict to displayed channels
                 if obj.globalMeanSubtraction
-                    idx = numel(obj.NeuralChanAcqList);
-                    newData(:,1:idx) = newData(:,1:idx) - mean(mean(newData(:,1:idx)));
+                    newData(:,1:numNeuralChans) = newData(:,1:numNeuralChans) - mean(mean(newData(:,1:numNeuralChans)));
+                    %newData(:,1:obj.sglSaveChans) = newData(:,1:obj.sglSaveChans) - mean(mean(newData(:,1:obj.sglSaveChans)));
                 end
                 t2 = toc(t0);
                 
                 %STAGE 3: Filter data if needed. Also: housekeeping to form fullDataBuffer & partialWaveformBuffer for subsequent processing stages.
                 if ~isempty(obj.filterCoefficients)
-                    idx = numel(obj.NeuralChanAcqList);
-                    [newData(:,1:idx),obj.filterCondition] = filter(obj.filterCoefficients{2},obj.filterCoefficients{1},double(newData(:,1:idx)),obj.filterCondition); %Convert to double..but still in A/D count values, not voltages
+                    [newData(:,1:numNeuralChans),obj.filterCondition] = filter(obj.filterCoefficients{2},obj.filterCoefficients{1},double(newData(:,1:numNeuralChans)),obj.filterCondition); %Convert to double..but still in A/D count values, not voltages
                 end
                 
                 
@@ -2454,7 +2453,7 @@ classdef SpokeModel < most.Model
         
         function zprvDrawThresholdLines(obj)
             
-            nnca = numel(obj.neuralChansAvailable);
+            numNeuralChans = numel(obj.neuralChansAvailable);
             
             %Clear existing threshold lines
             handlesToClear = [obj.hThresholdLines{1}(isgraphics(obj.hThresholdLines{1})); obj.hThresholdLines{2}(isgraphics(obj.hThresholdLines{2}))];
@@ -2467,7 +2466,7 @@ classdef SpokeModel < most.Model
                 perChanThreshold = ~strcmpi(obj.thresholdType,obj.waveformAmpUnits);
                 if perChanThreshold %RMS threshold with voltage units -- this is only mismatch type presently allowed
                     if isempty(obj.baselineRMS)
-                        obj.hThresholdLines = repmat({ones(nnca,1) * -1},2,1);
+                        obj.hThresholdLines = repmat({ones(numNeuralChans,1) * -1},2,1);
                         return; %nothing to draw
                     end
                 else %matched units/threshold-type
@@ -2516,13 +2515,13 @@ classdef SpokeModel < most.Model
                 fileRollover = false;
             end
             
-            nnca = numel(obj.neuralChansAvailable);
+            numNeuralChans = numel(obj.neuralChansAvailable);
             
             obj.fullDataBuffer = zeros(0,numel(obj.neuralChanDispList) + numel(obj.auxChanProcList));
             
             if ~fileRollover %&& strcmpi(obj.thresholdType,'rmsMultiple')
-                obj.baselineRMS = zeros(nnca,1);
-                obj.baselineMean = zeros(nnca,1);
+                obj.baselineRMS = zeros(numNeuralChans,1);
+                obj.baselineMean = zeros(numNeuralChans,1);
                 obj.baselineRMSLastScan = 0;
             end
             
@@ -2543,13 +2542,13 @@ classdef SpokeModel < most.Model
             
             % TODO: Does this work with channel subsets?
             
-            nnca = numel(obj.neuralChansAvailable);
+            numNeuralChans = numel(obj.neuralChansAvailable);
             
-            obj.lastPlottedWaveformCount = zeros(nnca,1);
-            obj.lastPlottedWaveformCountSinceClear = zeros(nnca,1);
+            obj.lastPlottedWaveformCount = zeros(numNeuralChans,1);
+            obj.lastPlottedWaveformCountSinceClear = zeros(numNeuralChans,1);
             
-            obj.reducedData = cell(nnca,1);
-            for i=1:1:nnca
+            obj.reducedData = cell(numNeuralChans,1);
+            for i=1:1:numNeuralChans
                 %for i=1:1:numel(obj.sglSaveChans)
                 if strcmpi(obj.displayMode,'waveform')
                     obj.reducedData{i} = struct('scanNums',[],'waveforms',{{}});
@@ -2816,22 +2815,22 @@ function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedDa
 % NOTES:
 %  VI050812: Not clear that recentSpikeScanNums can ever be non-empty -- might be able to get rid of this logic (and reducedData argument) altogether?
 maxNumWaveformsApplied = false;
-numChans = length(reducedData);
-newSpikeScanNums = cell(numChans,1);
+numNeuralChans = length(reducedData);
+newSpikeScanNums = cell(numNeuralChans,1);
 
-spikesFoundPerChan = zeros(numChans,1);
+spikesFoundPerChan = zeros(numNeuralChans,1);
 
 if isscalar(thresholdVal)
-    thresholdVal = repmat(thresholdVal,numChans,1);
+    thresholdVal = repmat(thresholdVal,numNeuralChans,1);
 end
 
 if isscalar(baselineMean)
-    baselineMean = repmat(baselineMean,numChans,1);
+    baselineMean = repmat(baselineMean,numNeuralChans,1);
 end
 
 localspikes = cell(numel(chanSubset),1);
 
-%for i=1:numChans
+%for i=1:numNeuralChans
 for h=1:numel(chanSubset)
     i = sglSaveChans(h)+1;
     
