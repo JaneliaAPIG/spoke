@@ -692,11 +692,7 @@ classdef SpokeModel < most.Model
             end
         end
         
-        %         function val = get.sglSaveChans(obj)
-        %              val = GetSaveChansNi(obj.hSGL); %channel subset as specified in SpikeGLX. Wierd - this /has/ to be done here, outside of zprvZpplyChanOrderAndSubset() to avoid a hang.
-        %         end
-        
-        
+              
         % Why does setting refreshPeriodMaxWaveformRate > refreshRate cause
         % waveformsPerPlot to be bypassed? Even if I set the
         % waveformsPerPlot to 1, if refreshPeriodMaxWaveformRate = 16 and
