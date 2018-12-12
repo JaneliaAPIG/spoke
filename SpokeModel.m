@@ -297,7 +297,7 @@ classdef SpokeModel < most.Model
             %Initialize a default display for appearances (some aspects gets overridden by processing on start())
             obj.zprvApplySaveChansAndChanMap();
             
-            nnca = numel(obj.neuralChansAvailable);
+            nnca = numel(obj.neuralChanAcqList);
             obj.hThresholdLines = repmat({ones(nnca,1) * -1},2,1);
             
             %Allocate spike waveforms & raster plots
@@ -339,7 +339,7 @@ classdef SpokeModel < most.Model
         
         function ziniCreateGrids(obj)
             
-            nnca = numel(obj.neuralChansAvailable);
+            nnca = numel(obj.neuralChanAcqList);
             
             obj.numActiveTabs = ceil(nnca/obj.PLOTS_PER_TAB);
             assert(obj.numActiveTabs <= obj.MAX_NUM_TABS,'Exceeded maximum number of tabs (%d)',obj.MAX_NUM_TABS); %TODO: Deal more gracefully
@@ -546,7 +546,7 @@ classdef SpokeModel < most.Model
         end
         
         function val = get.numTabs(obj)
-            nnca = numel(obj.neuralChansAvailable);
+            nnca = numel(obj.neuralChanAcqList);
             val = ceil(nnca/obj.PLOTS_PER_TAB);
         end
         
@@ -889,7 +889,7 @@ classdef SpokeModel < most.Model
                 dispType = obj.displayMode;
                 
                 %Update tabChanNumbers
-                nnca = numel(obj.neuralChansAvailable); %#ok<*MCSUP>
+                nnca = numel(obj.neuralChanAcqList); %#ok<*MCSUP>
                 
                 tcn = (1:obj.PLOTS_PER_TAB) + (val-1)*obj.PLOTS_PER_TAB;
                 tcn(tcn > nnca) = [];
@@ -1441,7 +1441,7 @@ classdef SpokeModel < most.Model
                     obj.maxReadableScanNum = cnt;
                 end
                 
-                numNeuralChans = numel(obj.neuralChansAvailable);
+                numNeuralChans = numel(obj.neuralChanAcqList);
 
                 rmsMultipleThresh = strcmpi(obj.thresholdType,'rmsMultiple');
                 rmsMultipleInitializing = rmsMultipleThresh && obj.baselineRMSLastScan == 0;
@@ -1690,9 +1690,9 @@ classdef SpokeModel < most.Model
                 obj.bufScanNumEnd = obj.maxReadableScanNum;
                 bufStartScanNum = obj.bufScanNumEnd - scansToRead - size(obj.fullDataBuffer,1); %Start index of fullDataBuffer (including previously read samples carried over from last timer batch, the last post-window worth not yet processed)
                 
-                %dfprintf('before augment: fulldatabuffer size: %d\n', size(obj.fullDataBuffer,1));
+                %dfprintf('before augment: fulldatabuffer size: %s newData size: %s\n', num2str(size(obj.fullDataBuffer)),num2str(size(newData)));
                 obj.fullDataBuffer = [obj.fullDataBuffer; newData];
-                %dfprintf('after augment: fulldatabuffer size: %d\n', size(obj.fullDataBuffer,1));
+                %dfprintf('after augment: fulldatabuffer size: %s newData size: %s\n', num2str(size(obj.fullDataBuffer)),num2str(size(newData)));
             end
             
             function znstStoreReducedData(timestampOffsets,bufStartScanNum)
@@ -2454,7 +2454,7 @@ classdef SpokeModel < most.Model
         
         function zprvDrawThresholdLines(obj)
             
-            nnca = numel(obj.neuralChansAvailable);
+            nnca = numel(obj.neuralChanAcqList);
             
             %Clear existing threshold lines
             handlesToClear = [obj.hThresholdLines{1}(isgraphics(obj.hThresholdLines{1})); obj.hThresholdLines{2}(isgraphics(obj.hThresholdLines{2}))];
@@ -2516,7 +2516,7 @@ classdef SpokeModel < most.Model
                 fileRollover = false;
             end
             
-            nnca = numel(obj.neuralChansAvailable);
+            nnca = numel(obj.neuralChanAcqList);
             
             obj.fullDataBuffer = zeros(0,numel(obj.neuralChanDispList) + numel(obj.auxChanProcList));
             
@@ -2543,7 +2543,7 @@ classdef SpokeModel < most.Model
             
             % TODO: Does this work with channel subsets?
             
-            nnca = numel(obj.neuralChansAvailable);
+            nnca = numel(obj.neuralChanAcqList);
             
             obj.lastPlottedWaveformCount = zeros(nnca,1);
             obj.lastPlottedWaveformCountSinceClear = zeros(nnca,1);
@@ -2615,7 +2615,7 @@ classdef SpokeModel < most.Model
             
             for i=1:length(displaysToClear)
                 %for j=1:min(obj.PLOTS_PER_TAB,numel(obj.hThresholdLines{1}))
-                for j=1:min(obj.PLOTS_PER_TAB)
+                for j=1:min(obj.PLOTS_PER_TAB,numel(obj.neuralChanAcqList))
                     
                     displayToClear = displaysToClear{i};
                     
