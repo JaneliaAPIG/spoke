@@ -155,7 +155,7 @@ classdef SpokeModel < most.Model
         filterCoefficients = {}; %Cell array of a,b filter coefficients for current filterWindow
         filterCondition; %Maintain 'initial condition' of filter between calls to filter()
         
-        tabChanNumbers; %Array of pad channel numbers (one-based) for currently specified tabDisplayed value
+        tabChanIdxs; %Array of indices (one-based) into neural chan list (i.e. neuralChanAcqList, nerualChanDispList, exact logic TBD) for currently specified tabDisplayed value
         
         blockTimer = false; %Flag used to block timer callback actions during certain operations
         
@@ -888,12 +888,12 @@ classdef SpokeModel < most.Model
                 obj.tabDisplayed = val;
                 dispType = obj.displayMode;
                 
-                %Update tabChanNumbers
+                %Update tabChanIdxs
                 nnca = numel(obj.neuralChanAcqList); %#ok<*MCSUP>
                 
-                tcn = (1:obj.PLOTS_PER_TAB) + (val-1)*obj.PLOTS_PER_TAB;
-                tcn(tcn > nnca) = [];
-                obj.tabChanNumbers = tcn; %One-based channel index
+                tci = (1:obj.PLOTS_PER_TAB) + (val-1)*obj.PLOTS_PER_TAB;
+                tci(tci > nnca) = [];
+                obj.tabChanIdxs = tci; 
                 
                 %Clear grid waveform/raster plots
                 obj.zprvClearPlots({obj.displayMode 'psth'},false); %Don't reuse existing threshold lines
@@ -904,22 +904,22 @@ classdef SpokeModel < most.Model
                 
                 hAxes = obj.displayModeAxes;
                 
-                for i=1:length(tcn)
-                    actualChannelNumber = tcn(i) - 1;
+                for i=1:length(tci)
+                    actualChannelNumber = tci(i) - 1;
                     if ~isequal(obj.neuralChanDispOrder, obj.neuralChansAvailable)
                         %Use channel mapping numbers (if they exist)
-                        tempChannelNumber = obj.neuralChanDispOrder( tcn(i) );
-                        if tempChannelNumber ~= tcn(i) - 1
-                            channelNumberString = strcat(num2str(tempChannelNumber),' (',num2str(tcn(i) - 1),')');
+                        tempChannelNumber = obj.neuralChanDispOrder( tci(i) );
+                        if tempChannelNumber ~= tci(i) - 1
+                            channelNumberString = strcat(num2str(tempChannelNumber),' (',num2str(tci(i) - 1),')');
                             textPosition = [.13 .92];
                         else
-                            channelNumberString = num2str(tcn(i) - 1);
+                            channelNumberString = num2str(tci(i) - 1);
                             textPosition = [.08 .92];
                         end
                     else
                         %Display with 0-based channel index
-                        tempChannelNumber = tcn(i) - 1;
-                        channelNumberString = num2str(tcn(i) - 1);
+                        tempChannelNumber = tci(i) - 1;
+                        channelNumberString = num2str(tci(i) - 1);
                         textPosition = [.08 .92];
                     end
                     
@@ -1264,7 +1264,7 @@ classdef SpokeModel < most.Model
                 histogramBins = floor(obj.horizontalRangeRaster(1)/scanPeriod):scansToBin:ceil(obj.horizontalRangeRaster(2)/scanPeriod);
                 
                 plotCount = 0;
-                for c=obj.tabChanNumbers
+                for c=obj.tabChanIdxs
                     plotCount = plotCount + 1;
                     
                     if isempty(obj.reducedData{c}.scanNums)
@@ -2194,7 +2194,7 @@ classdef SpokeModel < most.Model
             %Add new line object for stim-associated spikes
             
             plotCount = 0;
-            for c=obj.tabChanNumbers
+            for c=obj.tabChanIdxs
                 plotCount = plotCount + 1;
                 
                 
@@ -2333,7 +2333,7 @@ classdef SpokeModel < most.Model
             stimulusTriggeredWaveformMode = strcmpi(obj.displayMode,'waveform') && stimulusMode;
             
             %totalClearedSpikes = 0;
-            for i=obj.tabChanNumbers
+            for i=obj.tabChanIdxs
                 if isempty(obj.reducedData{i})
                     continue;
                 end
@@ -2475,7 +2475,7 @@ classdef SpokeModel < most.Model
                 %Draw threshold for each channel, computing for each channel if needed
                 xData = obj.horizontalRange;
                 
-                for i=obj.tabChanNumbers
+                for i=obj.tabChanIdxs
                     plotIdx = mod(i-1,obj.PLOTS_PER_TAB) + 1;
                     
                     if perChanThreshold
