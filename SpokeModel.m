@@ -2128,8 +2128,6 @@ classdef SpokeModel < most.Model
                     obj.thresholdAbsolute, ...
                     threshMean, ...
                     obj.refreshPeriodMaxNumWaveforms, ...
-                    obj.sglSaveChans, ...
-                    obj.neuralChanAcqList, ...
                     obj.horizontalRangeScans, ...
                     obj.debug, ...
                     obj.diagramm); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
@@ -2151,8 +2149,6 @@ classdef SpokeModel < most.Model
                     obj.thresholdAbsolute, ...
                     0, ...
                     obj.refreshPeriodMaxNumWaveforms, ...
-                    obj.sglSaveChans, ...
-                    obj.neuralChanAcqList, ...
                     obj.horizontalRangeScans, ...
                     obj.debug, ...
                     obj.diagramm); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
@@ -2788,7 +2784,7 @@ end
 
 
 %% LOCAL FUNCTIONS
-function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedData,fullDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,baselineMean,maxNumSpikes,sglSaveChans,chanSubset, horizontalRangeScans, debug, diagramm)
+function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedData,fullDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,baselineMean,maxNumSpikes,horizontalRangeScans, debug, diagramm)
 %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
 %
 % reducedData: Cell array, one element per channel, containing data for each detected spike (from earlier timer callback period(s))
@@ -2799,7 +2795,6 @@ function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedDa
 % thresholdAbsolute: Logical. If true, both crossings above thresholdVal or below -thresholdVal are considered spikes.
 % baselineMean: Mean value to subtract from data before detecting threshold crossings.
 % maxNumSpikes: Scalar, indicating max number of spikes to detect per channel (from the start of the fullDataBuffer)
-% chanSubset: The defined channel subset, which is specified by the user in spikeGLX. This is used to account for situations where the user-defined channels are a subset of the total number of channels.
 % horizontalRangeScans: The negative and positive offsets that define the horizontal range of the display in samples.
 % debug: set to true if debugging is activated. This should be equal to obj.debug.
 %
@@ -2819,10 +2814,10 @@ if isscalar(baselineMean)
     baselineMean = repmat(baselineMean,numChans,1);
 end
 
-localspikes = cell(numel(chanSubset),1);
+localspikes = cell(numChans,1);
 
 %for i=1:numChans
-for h=1:numel(chanSubset)
+for h=1:numChans
     
     %Determine recent (already detected) spike scan numbers to exclude from spike search
     lastSpikeScanNumIdx = find(reducedData{h}.scanNums < bufStartScanNum,1,'last');
