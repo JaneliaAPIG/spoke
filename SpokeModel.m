@@ -689,17 +689,6 @@ classdef SpokeModel < most.Model
             end
         end
         
-              
-        % Why does setting refreshPeriodMaxWaveformRate > refreshRate cause
-        % waveformsPerPlot to be bypassed? Even if I set the
-        % waveformsPerPlot to 1, if refreshPeriodMaxWaveformRate = 16 and
-        % refreshRate = 4, I get 4 lines per plot - and also my waveform
-        % processing gets screwed up.
-        
-        % well, apparently, it has to do with some kind of max waveform
-        % processing in zlcldetectspikes.
-        
-        
         function set.waveformsPerPlot(obj,val)
             obj.validatePropArg('waveformsPerPlot',val);
             obj.waveformsPerPlot = val;
