@@ -2004,11 +2004,11 @@ classdef SpokeModel < most.Model
                             end
                             
                         elseif spikeScanNum < (obj.maxReadableScanNum + round(obj.horizontalRangeRaster(1)/sampPeriod))
-                            %No hope of ever finding associated stimulus: mark for deletion
-                            spikesToClear(end+1) = spikeIdx;
+                            %If untagged spike happened before window of soonest possible next stim window, then no hope of ever finding associated stimulus: mark for deletion
+                            spikesToClear(end+1) = spikeIdx; %#ok<AGROW>
                         else
                             %fprintf('spikeScanNum: %d maxReadableScanNum: %d preStimTime: %d mostRecentHopefulScan: %d\n',spikeScanNum,obj.maxReadableScanNum, round(obj.horizontalRangeRaster(1)/sampPeriod),(obj.maxReadableScanNum - round(obj.horizontalRangeRaster(1)/sampPeriod)));
-                            %Do nothing -- spike still has hope of finding associated stimulus
+                            %Do nothing -- spike could be associated with a future stimulus
                         end
                     end
                     
@@ -2016,7 +2016,10 @@ classdef SpokeModel < most.Model
                     %Maintain indices of stored spikes associated with each event, for per-event lookup %TODO: Determine if this speedup is actually apparent/important
                     if taggedNewSpike
                         for i=1:length(obj.stimEventTypes_)
-                            obj.reducedData{b}.stimEventTypeStruct.(obj.stimEventTypes_{i}) =  [obj.reducedData{b}.stimEventTypeStruct.(obj.stimEventTypes_{i}) (taggedSpikeIdxsStruct.(obj.stimEventTypes_{i}) - length(spikesToClear))];
+                            taggedSpikeIdxs = taggedSpikeIdxsStruct.(obj.stimEventTypes_{i});
+                            taggedSpikeIdxs(spikesToClear) = [];
+                            
+                            obj.reducedData{b}.stimEventTypeStruct.(obj.stimEventTypes_{i}) = [obj.reducedData{b}.stimEventTypeStruct.(obj.stimEventTypes_{i}) taggedSpikeIdxs];
                         end
                     end
                     
