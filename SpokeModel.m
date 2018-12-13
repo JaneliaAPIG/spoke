@@ -2352,11 +2352,16 @@ classdef SpokeModel < most.Model
                 else
                     for j=1:numNewWaveforms
                         znstPlotWaveform(obj.reducedData{i}.waveforms{j});
-                        
+if i == 1
+fprintf('Chan 0: plotted waveform %d of %d\n',j,numNewWaveforms);
+end                        
                         %Clear spikes (if necessary)
                         %TODO: small optimization, pre-computed if/when clear(s) is needed rather than checking each time
                         if isequal(obj.waveformsPerPlotClearMode,'all')
-                            if obj.lastPlottedWaveformCountSinceClear(i) + numNewWaveforms > obj.waveformsPerPlot
+                            if obj.lastPlottedWaveformCountSinceClear(i) > obj.waveformsPerPlot
+if i == 1
+   fprintf('Chan 0: clearing all waveforms\n');
+end
                                 obj.hWaveforms(plotIdx).clearpoints();
                                 obj.lastPlottedWaveformCountSinceClear(i) = 0;
                             end
