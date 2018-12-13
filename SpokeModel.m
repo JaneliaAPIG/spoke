@@ -2352,23 +2352,18 @@ classdef SpokeModel < most.Model
                 if ~isempty(obj.waveformWrap)
                     j=0; % used only to pass assert in nested function below. J=0 in this case because we are referring to a previous waveform (as a product of a previously detected stimulus or spike)
                     znstPlotWaveform(obj.partialWaveformBuffer{1,i}); %plot oldest partial waveform stored
-                else
-                    for j=1:numNewWaveforms
-                        znstPlotWaveform(obj.reducedData{i}.waveforms{j});
-if i == 1
-fprintf('Chan 0: plotted waveform %d of %d\n',j,numNewWaveforms);
-end                        
-                        %Clear spikes (if necessary)
-                        %TODO: small optimization, pre-computed if/when clear(s) is needed rather than checking each time
+                else                    
+                    
+                    for j=1:numNewWaveforms                                                
+                        %Clear past waveforms, as needed
+                        %PERF: small optimization, can pre-compute outside of loop if/when clear(s) is needed rather than checking here each time
                         if isequal(obj.waveformsPerPlotClearMode,'all')
-                            if obj.lastPlottedWaveformCountSinceClear(i) > obj.waveformsPerPlot
-if i == 1
-   fprintf('Chan 0: clearing all waveforms\n');
-end
+                            if obj.lastPlottedWaveformCountSinceClear(i) + 1 > obj.waveformsPerPlot
                                 obj.hWaveforms(plotIdx).clearpoints();
                                 obj.lastPlottedWaveformCountSinceClear(i) = 0;
                             end
-                        end   
+                        end                           
+                        znstPlotWaveform(obj.reducedData{i}.waveforms{j});                                       
                     end
                 end                
                 
