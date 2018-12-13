@@ -1711,7 +1711,6 @@ classdef SpokeModel < most.Model
                 
                 try
                     
-                    scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
                     
                     for h=1:numel(obj.neuralChanAcqList)
                         %TODO: Where possible, short-circuit storage for
@@ -1761,6 +1760,8 @@ classdef SpokeModel < most.Model
                 
                 
                 function znstStoreReducedData_Waveforms()
+                    scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
+                    
                     idxWindowMin = scanWindowRelative + timestampOffsets_(1) - bufStartScanNum;
                     idxWindowMax = scanWindowRelative + timestampOffsets_(numNewTimestamps) - bufStartScanNum;
                     
