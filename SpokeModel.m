@@ -139,7 +139,6 @@ classdef SpokeModel < most.Model
         baselineRMSLastScan = 0; %Last scan number at which threshold RMS value was updated
         
         reducedData = {}; %Cell array, one cell per available neural channel, of structures storing reduced data from the full data (timestamps, waveform snippets, stimulus-tagged timestamps), based on detected stimuli and/or spike(s)
-        lastPlottedWaveformCount = []; %Scalar array specifying the spike count, for each channel that's been last plotted
         lastPlottedWaveformCountSinceClear = []; %Scalar array specificying the spike count, for each channel that's been last plotted (cleared every time a channel is cleared) - only used for 'all' plot clear mode.
         %globalMean; %Global mean value across acquisition channels, computed from all non-spike-window scan from within last baselineRMSTime, if globalMeanSubtraction=true is nonempty
         
@@ -2346,24 +2345,8 @@ classdef SpokeModel < most.Model
                 
                 %Plot new spike lines
                 horizontalRangeScansLength = diff(obj.horizontalRangeScans)+1;
-                xData = linspace(obj.horizontalRange(1),obj.horizontalRange(2),horizontalRangeScansLength)';
-                
-                newWaveformCounts = obj.lastPlottedWaveformCount(i) + (1:numNewWaveforms);
-                lineIdxs = mod(newWaveformCounts,obj.waveformsPerPlot) + 1; %The line object indices to use for these newly detected spikes
-                
-                % Clear spikes (if necessary)
-                switch obj.waveformsPerPlotClearMode
-                    case 'all'
-                        if obj.lastPlottedWaveformCountSinceClear(i) + numNewWaveforms > obj.waveformsPerPlot
-                            obj.hWaveforms(plotIdx).clearpoints();
-                            obj.lastPlottedWaveformCountSinceClear(i) = 0;
-                        end
-                    case 'oldest'
-                        
-                    otherwise
-                        disp('invalid plot clear mode');
-                end
-                
+                xData = linspace(obj.horizontalRange(1),obj.horizontalRange(2),horizontalRangeScansLength)';          
+                                      
                 % Draw new spikes
                 if ~isempty(obj.waveformWrap)
                     j=0; % used only to pass assert in nested function below. J=0 in this case because we are referring to a previous waveform (as a product of a previously detected stimulus or spike)
@@ -2371,9 +2354,17 @@ classdef SpokeModel < most.Model
                 else
                     for j=1:numNewWaveforms
                         znstPlotWaveform(obj.reducedData{i}.waveforms{j});
+                        
+                        %Clear spikes (if necessary)
+                        %TODO: small optimization, pre-computed if/when clear(s) is needed rather than checking each time
+                        if isequal(obj.waveformsPerPlotClearMode,'all')
+                            if obj.lastPlottedWaveformCountSinceClear(i) + numNewWaveforms > obj.waveformsPerPlot
+                                obj.hWaveforms(plotIdx).clearpoints();
+                                obj.lastPlottedWaveformCountSinceClear(i) = 0;
+                            end
+                        end   
                     end
-                end
-                
+                end                
                 
             end
             
@@ -2408,7 +2399,6 @@ classdef SpokeModel < most.Model
                 end
                 %Update line object with waveform for current spike
                 obj.hWaveforms(plotIdx).addpoints(vertcat(xData, NaN),vertcat(waveform, NaN)); % old
-                obj.lastPlottedWaveformCount(i) = obj.lastPlottedWaveformCount(i) + 1;
                 obj.lastPlottedWaveformCountSinceClear(i) = obj.lastPlottedWaveformCountSinceClear(i) + 1;
             end
             
@@ -2545,7 +2535,6 @@ classdef SpokeModel < most.Model
             
             numNeuralChans = numel(obj.neuralChansAvailable);
             
-            obj.lastPlottedWaveformCount = zeros(numNeuralChans,1);
             obj.lastPlottedWaveformCountSinceClear = zeros(numNeuralChans,1);
             
             obj.reducedData = cell(numNeuralChans,1);
