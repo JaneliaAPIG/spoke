@@ -1534,7 +1534,18 @@ classdef SpokeModel < most.Model
                 %STAGE 4: Detect stimulus and/or spike(s) within data buffer
                 newSpikeScanNums = cell(numNeuralChans,1);
                 
-                %STAGE 4a: Detect spike(s) within data buffer
+                
+                %STAGE 4a: Detect stimulus within data buffer
+                % (modes: Stimulus-triggered Waveform & Raster)
+                % Currently only detects up to one stimulus per data period
+                if stimulusTriggeredWaveformMode
+                    obj.stimScanNums=[];
+                    znstDetectStimulus(bufStartScanNum);
+                elseif rasterDisplayMode
+                    znstDetectStimulus(bufStartScanNum);
+                end                                       
+                   
+                %STAGE 4b: Detect spike(s) within data buffer
                 %  (Modes: Spike-triggered Waveform & Raster)
                 %  Excludes spikes during:
                 %   * 'refractory period'(discarded)
@@ -1553,17 +1564,8 @@ classdef SpokeModel < most.Model
                     else
                         newSpikeScanNums = zprvDetectNewSpikes(obj,bufStartScanNum);
                     end
-                end
-                
-                %STAGE 4b: Detect stimulus within data buffer
-                % (modes: Stimulus-triggered Waveform & Raster)
-                % Currently only detects up to one stimulus per data period
-                if stimulusTriggeredWaveformMode
-                    obj.stimScanNums=[];
-                    znstDetectStimulus(bufStartScanNum);
-                elseif rasterDisplayMode
-                    znstDetectStimulus(bufStartScanNum);
-                end
+                end                
+
                 
                 t4 = toc(t0);
                 
