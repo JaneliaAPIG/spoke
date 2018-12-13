@@ -395,7 +395,7 @@ classdef SpokeModel < most.Model
                 %Places axes in panel and configure
                 obj.hPlots(i) = axes('Parent',obj.hPanels.waveform(i),'Position',[0 0 1 1],'XLim',obj.horizontalRange); %,'YLim',obj.verticalRange);
                 obj.hRasters(i) = axes('Parent',obj.hPanels.raster(i),'Position',[0 0 1 1],'XLim',obj.horizontalRangeRaster);
-                obj.hPSTHs(i) = axes('Parent',obj.hPanels.psth(i),'Position',[0 0 1 1]);
+                obj.hPSTHs(i) = axes('Parent',obj.hPanels.psth(i),'Position',[0 0 1 1],'XLim',obj.horizontalRangeRaster);
                 
                 %TODO: Remove this function & just set here
                 obj.zprvSetAxesProps(obj.hPlots(i));
@@ -857,6 +857,7 @@ classdef SpokeModel < most.Model
             set(obj.hRasters,'XLim',val);
             
             obj.zprvClearPlots('psth');
+            set(obj.hPSTHs,'XLim',val);
             
             obj.horizontalRangeRaster = val;
         end
