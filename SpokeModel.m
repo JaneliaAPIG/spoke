@@ -689,17 +689,6 @@ classdef SpokeModel < most.Model
             end
         end
         
-              
-        % Why does setting refreshPeriodMaxWaveformRate > refreshRate cause
-        % waveformsPerPlot to be bypassed? Even if I set the
-        % waveformsPerPlot to 1, if refreshPeriodMaxWaveformRate = 16 and
-        % refreshRate = 4, I get 4 lines per plot - and also my waveform
-        % processing gets screwed up.
-        
-        % well, apparently, it has to do with some kind of max waveform
-        % processing in zlcldetectspikes.
-        
-        
         function set.waveformsPerPlot(obj,val)
             obj.validatePropArg('waveformsPerPlot',val);
             obj.waveformsPerPlot = val;
@@ -1620,7 +1609,7 @@ classdef SpokeModel < most.Model
                 %TODO: Review moving this to fullDataBuffer formation step above in STAGE 3
                 try
                     if rasterDisplayMode
-                        %Raster mode: leave all but the number of scans required to classify
+                        %Raster mode: remove all but the number of scans required to classify
                         obj.fullDataBuffer(1:end-max(1,obj.stimEventClassifyNumScans)+1,:) = [];
                     else
                         %Waveform mode: leave only one full horizontalRange (pre+post+1 sample) at the end
@@ -1722,7 +1711,6 @@ classdef SpokeModel < most.Model
                 
                 try
                     
-                    scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
                     
                     for h=1:numel(obj.neuralChanAcqList)
                         %TODO: Where possible, short-circuit storage for
@@ -1772,6 +1760,8 @@ classdef SpokeModel < most.Model
                 
                 
                 function znstStoreReducedData_Waveforms()
+                    scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
+                    
                     idxWindowMin = scanWindowRelative + timestampOffsets_(1) - bufStartScanNum;
                     idxWindowMax = scanWindowRelative + timestampOffsets_(numNewTimestamps) - bufStartScanNum;
                     
