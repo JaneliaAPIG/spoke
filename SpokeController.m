@@ -373,6 +373,7 @@ function s = lclInitPropBindings()
 
   s.psthTimerPeriod = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
 
+  s.spikeRefractoryPeriod = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','numeric'));
 
   %s.spikeAmpUnits = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','char')); 
   %s.stimEventTypeDisplayed = struct('GuiIDs',{{'SpikeGrid','pcRareAdjustProps'}},'PropControlData',struct('format','char'));
