@@ -130,9 +130,9 @@ classdef SpokeModel < most.Model
         
         neuralChanDispOrder; %Order in which neuralChans should be displayed. Includes all acquired neural chans, whether included in subset or not.
         
-        neuralChanAcqList; % List of neural chans included in SpikeGLX chan subset
-        neuralChanDispList; %Ordered list of neural chans displayed. Display ordering applied. Channel subset, if any, is applied.
-        auxChanProcList; %List of auxiliary chans processed. Channel subset, if any, is applied.
+        neuralChanAcqList; %Ascending list of neural chans within SpikeGLX save chans (sglSaveChans).
+        neuralChanDispList; %Ordered list of neural chans within SpikeGLX save chans (sglSaveChans), specifying display ordering. 
+        auxChanProcList; %Ascending list of auxiliary chans (TOCHECK: restricted to within SpikeGLX save chans?)
         
         baselineRMS; %Array of RMS values, one per channel, computed from all non-spike-window scans from within last baselineRMSTime
         baselineMean; %Array of mean values, one per channel, computed from all non-spike-window scans from within last baselineRMSTime
@@ -296,11 +296,11 @@ classdef SpokeModel < most.Model
             %Initialize a default display for appearances (some aspects gets overridden by processing on start())
             obj.zprvApplySaveChansAndChanMap();
             
-            numNeuralChans = numel(obj.neuralChansAvailable);
-            obj.hThresholdLines = repmat({ones(numNeuralChans,1) * -1},2,1);
+            nnca = numel(obj.neuralChanAcqList);
+            obj.hThresholdLines = repmat({ones(nnca,1) * -1},2,1);
             
             %Allocate spike waveforms & raster plots
-            obj.hWaveforms = gobjects(numNeuralChans,1);
+            obj.hWaveforms = gobjects(nnca,1);
             for i=1:obj.PLOTS_PER_TAB
                 obj.hWaveforms(i) = animatedline('Parent',obj.hPlots(i),'Color','k','MaximumNumPoints',Inf,'Marker','.','MarkerSize',3,'LineStyle','-');
             end
@@ -338,9 +338,9 @@ classdef SpokeModel < most.Model
         
         function ziniCreateGrids(obj)
             
-            numNeuralChans = numel(obj.neuralChansAvailable);
+            nnca = numel(obj.neuralChanAcqList);
             
-            obj.numActiveTabs = ceil(numNeuralChans/obj.PLOTS_PER_TAB);
+            obj.numActiveTabs = ceil(nnca/obj.PLOTS_PER_TAB);
             assert(obj.numActiveTabs <= obj.MAX_NUM_TABS,'Exceeded maximum number of tabs (%d)',obj.MAX_NUM_TABS); %TODO: Deal more gracefully
             
             %This is a good idea...but let's keep it simple for now
@@ -545,8 +545,8 @@ classdef SpokeModel < most.Model
         end
         
         function val = get.numTabs(obj)
-            numNeuralChans = numel(obj.neuralChansAvailable);
-            val = ceil(numNeuralChans/obj.PLOTS_PER_TAB);
+            nnca = numel(obj.neuralChanAcqList);
+            val = ceil(nnca/obj.PLOTS_PER_TAB);
         end
         
         function val = get.refreshPeriodMaxNumWaveforms(obj)
@@ -888,10 +888,10 @@ classdef SpokeModel < most.Model
                 dispType = obj.displayMode;
                 
                 %Update tabChanNumbers
-                numNeuralChans = numel(obj.neuralChansAvailable); %#ok<*MCSUP>
+                nnca = numel(obj.neuralChanAcqList); %#ok<*MCSUP>
                 
                 tcn = (1:obj.PLOTS_PER_TAB) + (val-1)*obj.PLOTS_PER_TAB;
-                tcn(tcn > numNeuralChans) = [];
+                tcn(tcn > nnca) = [];
                 obj.tabChanNumbers = tcn; %One-based channel index
                 
                 %Clear grid waveform/raster plots
@@ -1095,7 +1095,7 @@ classdef SpokeModel < most.Model
                         fnames = obj.stimEventTypes;
                     end
                     
-                    for i=1:numel(obj.neuralChansAvailable)
+                    for i=1:numel(obj.neuralChanAcqList)
                         for j=1:length(fnames)
                             obj.reducedData{i}.stimEventTypeStruct.(fnames{j}) = [];
                         end
@@ -1440,8 +1440,8 @@ classdef SpokeModel < most.Model
                     obj.maxReadableScanNum = cnt;
                 end
                 
-                numNeuralChans = numel(obj.neuralChansAvailable);
-                
+                numNeuralChans = numel(obj.neuralChanAcqList);
+
                 rmsMultipleThresh = strcmpi(obj.thresholdType,'rmsMultiple');
                 rmsMultipleInitializing = rmsMultipleThresh && obj.baselineRMSLastScan == 0;
                 
@@ -1491,7 +1491,7 @@ classdef SpokeModel < most.Model
                 %STAGE 2: Apply global mean subtraction, if applicable. Applies only to neural channels. TODO: Restrict to displayed channels
                 if obj.globalMeanSubtraction
                     idx = numel(obj.neuralChanAcqList);
-                    newData(:,1:idx) = newData(:,1:idx) - mean(mean(newData(:,1:idx)));                    
+                    newData(:,1:idx) = newData(:,1:idx) - mean(mean(newData(:,1:idx)));
                 end
                 t2 = toc(t0);
                 
@@ -1689,9 +1689,9 @@ classdef SpokeModel < most.Model
                 obj.bufScanNumEnd = obj.maxReadableScanNum;
                 bufStartScanNum = obj.bufScanNumEnd - scansToRead - size(obj.fullDataBuffer,1); %Start index of fullDataBuffer (including previously read samples carried over from last timer batch, the last post-window worth not yet processed)
                 
-                %dfprintf('before augment: fulldatabuffer size: %d\n', size(obj.fullDataBuffer,1));
+                %dfprintf('before augment: fulldatabuffer size: %s newData size: %s\n', num2str(size(obj.fullDataBuffer)),num2str(size(newData)));
                 obj.fullDataBuffer = [obj.fullDataBuffer; newData];
-                %dfprintf('after augment: fulldatabuffer size: %d\n', size(obj.fullDataBuffer,1));
+                %dfprintf('after augment: fulldatabuffer size: %s newData size: %s\n', num2str(size(obj.fullDataBuffer)),num2str(size(newData)));
             end
             
             function znstStoreReducedData(timestampOffsets,bufStartScanNum)
@@ -1720,7 +1720,6 @@ classdef SpokeModel < most.Model
                     scanWindowRelative = obj.horizontalRangeScans(1):obj.horizontalRangeScans(2);
                     
                     for h=1:numel(obj.neuralChanAcqList)
-                        i = obj.sglSaveChans(h)+1;
                         %TODO: Where possible, short-circuit storage for
                         %channels not being displayed, to reduce processing
                         %time
@@ -1728,14 +1727,14 @@ classdef SpokeModel < most.Model
                         if stimulusTriggeredWaveformMode
                             timestampOffsets_ = timestampOffsets;
                         else
-                            timestampOffsets_ = timestampOffsets{i};
+                            timestampOffsets_ = timestampOffsets{h};
                         end
                         numNewTimestamps = length(timestampOffsets_);
                         
                         %In waveform display modes - clear all previous channel data
                         if waveformDisplay
-                            obj.reducedData{i}.scanNums = [];
-                            obj.reducedData{i}.waveforms = cell(numNewTimestamps,1);
+                            obj.reducedData{h}.scanNums = [];
+                            obj.reducedData{h}.waveforms = cell(numNewTimestamps,1);
                         end
                         
                         if numNewTimestamps == 0
@@ -1744,14 +1743,14 @@ classdef SpokeModel < most.Model
                         
                         %Store timestamp data
                         if stimulusTriggeredWaveformMode
-                            obj.reducedData{i}.scanNums = [obj.reducedData{i}.scanNums timestampOffsets];
+                            obj.reducedData{h}.scanNums = [obj.reducedData{h}.scanNums timestampOffsets];
                         elseif waveformDisplay %spike-triggered waveform mode
-                            obj.reducedData{i}.scanNums = timestampOffsets{i};
+                            obj.reducedData{h}.scanNums = timestampOffsets{h};
                         else %raster mode
-                            obj.reducedData{i}.scanNums = [obj.reducedData{i}.scanNums timestampOffsets{i}];
-                            obj.reducedData{i}.stimRelScanNums = [obj.reducedData{i}.stimRelScanNums zeros(1,numNewTimestamps)];
-                            obj.reducedData{i}.stimNums = [obj.reducedData{i}.stimNums zeros(1,numNewTimestamps)];
-                            obj.reducedData{i}.stimEventTypes = [obj.reducedData{i}.stimEventTypes repmat({''},1,numNewTimestamps)];
+                            obj.reducedData{h}.scanNums = [obj.reducedData{h}.scanNums timestampOffsets{h}];
+                            obj.reducedData{h}.stimRelScanNums = [obj.reducedData{h}.stimRelScanNums zeros(1,numNewTimestamps)];
+                            obj.reducedData{h}.stimNums = [obj.reducedData{h}.stimNums zeros(1,numNewTimestamps)];
+                            obj.reducedData{h}.stimEventTypes = [obj.reducedData{h}.stimEventTypes repmat({''},1,numNewTimestamps)];
                         end
                         
                         %Store waveform data
@@ -1775,7 +1774,7 @@ classdef SpokeModel < most.Model
                     
                     if obj.debug && h==1 % Limit debug to channel 1 to keep things simple.
                         % ****************************** DEBUG *****************************
-                        fprintf('\nscanNums: %d, numNewTimestamps: %d\n', obj.reducedData{i}.scanNums, numNewTimestamps);
+                        fprintf('\nscanNums: %d, numNewTimestamps: %d\n', obj.reducedData{h}.scanNums, numNewTimestamps);
                         fprintf('timestampOffsets: %s\n',sprintf('%d ',timestampOffsets_));
                         fprintf('scanWindowRelative: %s\n',sprintf('%d ',scanWindowRelative));
                         fprintf('idxWindowMin: %s\n',sprintf('%d ',idxWindowMin));
@@ -1817,7 +1816,7 @@ classdef SpokeModel < most.Model
                             waveform(tmpWindow < 1) = obj.fullDataBuffer(1,h); % Pad the waveform to the left of the zero crossing with whatever the first value in the waveform is.
                             waveform(tmpWindow >= 1) = obj.fullDataBuffer(tmpWindow >= 1,h); % Fill in the waveform to the right of the zero crossing with the actual waveform.
                             newwaveform = vertcat(zeros(offset,1),waveform); % Now, center the waveform on the original "trigger level" crossing index.
-                            obj.reducedData{i}.waveforms{j} = newwaveform(1:length(tmpWindow));
+                            obj.reducedData{h}.waveforms{j} = newwaveform(1:length(tmpWindow));
                             
                             if obj.debug &&  h == 1
                                 % ********************************** DEBUG ********************************
@@ -1844,22 +1843,22 @@ classdef SpokeModel < most.Model
                         elseif (idxWindowMax(end) > size(obj.fullDataBuffer,1)) %'late' waveform at end of a timer chunk, extending beyond available data
                             if stimulusTriggeredWaveformMode
                                 if h==1 % EKK - Revisit this condition. Why does the first channel require different processing?
-                                    obj.partialWaveformBuffer{end+1,i} = obj.fullDataBuffer(idxWindowMin(1):end,h);
+                                    obj.partialWaveformBuffer{end+1,h} = obj.fullDataBuffer(idxWindowMin(1):end,h);
                                     newWaveformWrapVal = idxWindowMax(end) - size(obj.fullDataBuffer,1); %TODO CHECK FOR +1 NECESSARY?
                                 else
-                                    obj.partialWaveformBuffer{end,i} = obj.fullDataBuffer(idxWindowMin(1):end,h);
+                                    obj.partialWaveformBuffer{end,h} = obj.fullDataBuffer(idxWindowMin(1):end,h);
                                 end
                             else
                                 %Warn the user if a 'late' waveform arises in spike-triggered waveform mode
                                 fprintf('waveform #%d out of bounds, channel #%d, idxWindow min(1): %d, idxWindow min(end): %d, idxWindow max(1): %d, idxWindow max(end): %d\n', ...
-                                    j, i, idxWindowMin(1), idxWindowMin(end), idxWindowMax(1), idxWindowMin(end) );
+                                    j, h, idxWindowMin(1), idxWindowMin(end), idxWindowMax(1), idxWindowMin(end) );
                                 
                                 %TODO:Determine if this can actually happen; if the partialWaveformBuffer/waveformWrap
                                 %mechanism is needed/useful in spike-triggered waveform mode; and/or if the contract/augment buffer mechanism
                                 %supercedes or is superceded by the partialWaveformBuffer/waveformWrap potential mechanism
                             end
                         else
-                            obj.reducedData{i}.waveforms{j} = obj.fullDataBuffer(idxWindow,h);
+                            obj.reducedData{h}.waveforms{j} = obj.fullDataBuffer(idxWindow,h);
                         end
                     end
                 end
@@ -1953,7 +1952,6 @@ classdef SpokeModel < most.Model
                 taggedSpikeIdxStructInit = cell2struct(repmat({[]},length(obj.stimEventTypes_),1),obj.stimEventTypes_);
                 
                 for b=1:numel(obj.neuralChanAcqList)
-                    c=obj.sglSaveChans(b) + 1; 
                     
                     taggedNewSpike = false;
                     spikesToClear = [];
@@ -1962,12 +1960,12 @@ classdef SpokeModel < most.Model
                     %Loop through spikes from most recent backwards, tagging event-type if possible
                     
                     %                    fprintf('length of spikedata: %d\n',length(obj.spikeData{c}.scanNums));
-                    for spikeIdx = length(obj.reducedData{c}.scanNums):-1:1
+                    for spikeIdx = length(obj.reducedData{b}.scanNums):-1:1
                         %                        fprintf('hello!!!! %d\n',spikeIdx);
                         tmp1 =tic;
                         
                         %Reached previously-tagged spikes -- stop loop
-                        if obj.reducedData{c}.stimNums(spikeIdx) > 0
+                        if obj.reducedData{b}.stimNums(spikeIdx) > 0
                             break;
                         end
                         
@@ -1975,7 +1973,7 @@ classdef SpokeModel < most.Model
                         %assert(isempty(obj.reducedData{c}.stimEventTypes{spikeIdx}),'reducedData was stored longer than expected for an already stimulus event-tagged spike');
                         
                         %Find associated stim spike
-                        spikeScanNum = obj.reducedData{c}.scanNums(spikeIdx);
+                        spikeScanNum = obj.reducedData{b}.scanNums(spikeIdx);
                         
                         % fprintf('spikeScanNum: %d\n',spikeScanNum);
                         
@@ -1989,14 +1987,14 @@ classdef SpokeModel < most.Model
                                 eventTag = obj.stimEventTypeNames{stimIdx}; %Note - this might still be empty. That's OK...will try again to tag it the next time around.
                             end
                             
-                            if ~isempty(eventTag) && isempty(obj.reducedData{c}.stimEventTypes{spikeIdx})
-                                obj.reducedData{c}.stimEventTypes{spikeIdx} = eventTag;
+                            if ~isempty(eventTag) && isempty(obj.reducedData{b}.stimEventTypes{spikeIdx})
+                                obj.reducedData{b}.stimEventTypes{spikeIdx} = eventTag;
                                 taggedSpikeIdxsStruct.(eventTag)(end+1) = spikeIdx; %Add spikeIdx to list of spikes associated with this eventTag
                                 
-                                obj.reducedData{c}.stimNums(spikeIdx) = stimIdx;
-                                obj.reducedData{c}.stimRelScanNums(spikeIdx) = spikeScanNum - obj.stimScanNums(stimIdx);
+                                obj.reducedData{b}.stimNums(spikeIdx) = stimIdx;
+                                obj.reducedData{b}.stimRelScanNums(spikeIdx) = spikeScanNum - obj.stimScanNums(stimIdx);
                                 
-                                chanNewSpikes.(eventTag)(c) = chanNewSpikes.(eventTag)(c) + 1;
+                                chanNewSpikes.(eventTag)(b) = chanNewSpikes.(eventTag)(b) + 1;
                                 taggedNewSpike = true;
                             end
                             
@@ -2013,7 +2011,7 @@ classdef SpokeModel < most.Model
                     %Maintain indices of stored spikes associated with each event, for per-event lookup %TODO: Determine if this speedup is actually apparent/important
                     if taggedNewSpike
                         for i=1:length(obj.stimEventTypes_)
-                            obj.reducedData{c}.stimEventTypeStruct.(obj.stimEventTypes_{i}) =  [obj.reducedData{c}.stimEventTypeStruct.(obj.stimEventTypes_{i}) (taggedSpikeIdxsStruct.(obj.stimEventTypes_{i}) - length(spikesToClear))];
+                            obj.reducedData{b}.stimEventTypeStruct.(obj.stimEventTypes_{i}) =  [obj.reducedData{b}.stimEventTypeStruct.(obj.stimEventTypes_{i}) (taggedSpikeIdxsStruct.(obj.stimEventTypes_{i}) - length(spikesToClear))];
                         end
                     end
                     
@@ -2021,10 +2019,10 @@ classdef SpokeModel < most.Model
                     %Clear 'orphan' spikes with no hope of finding associated stimulus
                     tmp1 = tic;
                     if ~isempty(spikesToClear)
-                        obj.reducedData{c}.scanNums(spikesToClear) = [];
-                        obj.reducedData{c}.stimNums(spikesToClear) = [];
-                        obj.reducedData{c}.stimRelScanNums(spikesToClear) = [];
-                        obj.reducedData{c}.stimEventTypes(spikesToClear) = [];
+                        obj.reducedData{b}.scanNums(spikesToClear) = [];
+                        obj.reducedData{b}.stimNums(spikesToClear) = [];
+                        obj.reducedData{b}.stimRelScanNums(spikesToClear) = [];
+                        obj.reducedData{b}.stimEventTypes(spikesToClear) = [];
                     end
                 end
             end
@@ -2444,7 +2442,7 @@ classdef SpokeModel < most.Model
         
         function zprvDrawThresholdLines(obj)
             
-            numNeuralChans = numel(obj.neuralChansAvailable);
+            nnca = numel(obj.neuralChanAcqList);
             
             %Clear existing threshold lines
             handlesToClear = [obj.hThresholdLines{1}(isgraphics(obj.hThresholdLines{1})); obj.hThresholdLines{2}(isgraphics(obj.hThresholdLines{2}))];
@@ -2457,7 +2455,7 @@ classdef SpokeModel < most.Model
                 perChanThreshold = ~strcmpi(obj.thresholdType,obj.waveformAmpUnits);
                 if perChanThreshold %RMS threshold with voltage units -- this is only mismatch type presently allowed
                     if isempty(obj.baselineRMS)
-                        obj.hThresholdLines = repmat({ones(numNeuralChans,1) * -1},2,1);
+                        obj.hThresholdLines = repmat({ones(nnca,1) * -1},2,1);
                         return; %nothing to draw
                     end
                 else %matched units/threshold-type
@@ -2506,13 +2504,13 @@ classdef SpokeModel < most.Model
                 fileRollover = false;
             end
             
-            numNeuralChans = numel(obj.neuralChansAvailable);
+            nnca = numel(obj.neuralChanAcqList);
             
-            obj.fullDataBuffer = zeros(0,numel(obj.neuralChanDispList) + numel(obj.auxChanProcList));
+            obj.fullDataBuffer = zeros(0, numel(obj.sglSaveChans));
             
             if ~fileRollover %&& strcmpi(obj.thresholdType,'rmsMultiple')
-                obj.baselineRMS = zeros(numNeuralChans,1);
-                obj.baselineMean = zeros(numNeuralChans,1);
+                obj.baselineRMS = zeros(nnca,1);
+                obj.baselineMean = zeros(nnca,1);
                 obj.baselineRMSLastScan = 0;
             end
             
@@ -2533,12 +2531,12 @@ classdef SpokeModel < most.Model
             
             % TODO: Does this work with channel subsets?
             
-            numNeuralChans = numel(obj.neuralChansAvailable);
+            nnca = numel(obj.neuralChanAcqList);
             
-            obj.lastPlottedWaveformCountSinceClear = zeros(numNeuralChans,1);
+            obj.lastPlottedWaveformCountSinceClear = zeros(nnca,1);
             
-            obj.reducedData = cell(numNeuralChans,1);
-            for i=1:1:numNeuralChans
+            obj.reducedData = cell(nnca,1);
+            for i=1:1:nnca
                 %for i=1:1:numel(obj.sglSaveChans)
                 if strcmpi(obj.displayMode,'waveform')
                     obj.reducedData{i} = struct('scanNums',[],'waveforms',{{}});
@@ -2604,7 +2602,7 @@ classdef SpokeModel < most.Model
             
             for i=1:length(displaysToClear)
                 %for j=1:min(obj.PLOTS_PER_TAB,numel(obj.hThresholdLines{1}))
-                for j=1:min(obj.PLOTS_PER_TAB)
+                for j=1:min(obj.PLOTS_PER_TAB,numel(obj.neuralChanAcqList))
                     
                     displayToClear = displaysToClear{i};
                     
@@ -2805,31 +2803,30 @@ function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedDa
 % NOTES:
 %  VI050812: Not clear that recentSpikeScanNums can ever be non-empty -- might be able to get rid of this logic (and reducedData argument) altogether?
 maxNumWaveformsApplied = false;
-numNeuralChans = length(reducedData);
-newSpikeScanNums = cell(numNeuralChans,1);
+numChans = length(reducedData);
+newSpikeScanNums = cell(numChans,1);
 
-spikesFoundPerChan = zeros(numNeuralChans,1);
+spikesFoundPerChan = zeros(numChans,1);
 
 if isscalar(thresholdVal)
-    thresholdVal = repmat(thresholdVal,numNeuralChans,1);
+    thresholdVal = repmat(thresholdVal,numChans,1);
 end
 
 if isscalar(baselineMean)
-    baselineMean = repmat(baselineMean,numNeuralChans,1);
+    baselineMean = repmat(baselineMean,numChans,1);
 end
 
 localspikes = cell(numel(chanSubset),1);
 
-%for i=1:numNeuralChans
+%for i=1:numChans
 for h=1:numel(chanSubset)
-    i = sglSaveChans(h)+1;
     
     %Determine recent (already detected) spike scan numbers to exclude from spike search
-    lastSpikeScanNumIdx = find(reducedData{i}.scanNums < bufStartScanNum,1,'last');
+    lastSpikeScanNumIdx = find(reducedData{h}.scanNums < bufStartScanNum,1,'last');
     if isempty(lastSpikeScanNumIdx)
-        recentSpikeScanNums = reducedData{i}.scanNums;
+        recentSpikeScanNums = reducedData{h}.scanNums;
     else
-        recentSpikeScanNums = reducedData{i}.scanNums(lastSpikeScanNumIdx + 1:end);
+        recentSpikeScanNums = reducedData{h}.scanNums(lastSpikeScanNumIdx + 1:end);
     end
     
     %Find new spikes one at a time, imposing refractory period
@@ -2852,12 +2849,12 @@ for h=1:numel(chanSubset)
         %fprintf('currIdx: %d scansToSearch: %d postSpikeNumScans: %d\n',currIdx,scansToSearch,postSpikeNumScans);
         %Find at most one spike (threshold crossing) in the fullDataBuffer
         if thresholdAbsolute %Find crossings above or below absolute threshold level
-            nextSpikeIdx = currIdx + find(diff(abs(fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) > abs(thresholdVal(i))) == 1,1);
+            nextSpikeIdx = currIdx + find(diff(abs(fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(h)) > abs(thresholdVal(h))) == 1,1);
         else
             if thresholdVal >= 0 %Find crossings above threshold level
-                nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) > thresholdVal(i)) == 1,1); %Find at most one spike
+                nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(h)) > thresholdVal(h)) == 1,1); %Find at most one spike
             else %Find crossings below threshold level
-                nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(i)) < thresholdVal(i)) == 1,1); %Find at most one spike
+                nextSpikeIdx = currIdx + find(diff((fullDataBuffer(currIdx:scansToSearch,h) - baselineMean(h)) < thresholdVal(h)) == 1,1); %Find at most one spike
             end
         end
         
@@ -2887,10 +2884,10 @@ for h=1:numel(chanSubset)
             %This is why nextSpikeScanNum adds the nextSpikeIdx to the
             %bufStartScanNum. Think of bufStartScanNum as being the offset
             %in "Global Space" that equals zero in the "local space".
-            newSpikeScanNums{i}(end+1) = nextSpikeScanNum;
+            newSpikeScanNums{h}(end+1) = nextSpikeScanNum;
             localspikes{h}(end+1) = nextSpikeIdx;
             %fprintf('bufStartScanNum: %d, nextSpikeScanNum: %d, size of fullDataBuffer: %s \n',bufStartScanNum, nextSpikeScanNum, sprintf('%d ',size(fullDataBuffer)));
-            spikesFoundPerChan(i) = spikesFoundPerChan(i) + 1;
+            spikesFoundPerChan(h) = spikesFoundPerChan(h) + 1;
             
         end
         
