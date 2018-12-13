@@ -126,10 +126,8 @@ classdef SpokeModel < most.Model
         
         numActiveTabs;
         
-        sglSaveChans; %SpikeGLX save channels. These are the channels (both neural and non-neural channels) that SpikeGLX both saves and transfers to Spoke.
-        
-        neuralChanDispOrder; %Order in which neuralChans should be displayed. Includes all acquired neural chans, whether included in subset or not.
-        
+        sglSaveChans; %SpikeGLX save channels. These are the channels (both neural and non-neural channels) that SpikeGLX both saves and transfers to Spoke.        
+       
         neuralChanAcqList; %Ascending list of neural chans within SpikeGLX save chans (sglSaveChans).
         neuralChanDispList; %Ordered list of neural chans within SpikeGLX save chans (sglSaveChans), specifying display ordering. 
         auxChanProcList; %Ascending list of auxiliary chans (TOCHECK: restricted to within SpikeGLX save chans?)
@@ -903,27 +901,32 @@ classdef SpokeModel < most.Model
                 
                 hAxes = obj.displayModeAxes;
                 
+                %Display SpikeGLX channel numbers in accordance to channel map order, if any
                 for i=1:length(tci)
-                    actualChannelNumber = tci(i) - 1;
-                    if ~isequal(obj.neuralChanDispOrder, obj.neuralChansAvailable)
-                        %Use channel mapping numbers (if they exist)
-                        tempChannelNumber = obj.neuralChanDispOrder( tci(i) );
-                        if tempChannelNumber ~= tci(i) - 1
-                            channelNumberString = strcat(num2str(tempChannelNumber),' (',num2str(tci(i) - 1),')');
-                            textPosition = [.13 .92];
-                        else
-                            channelNumberString = num2str(tci(i) - 1);
-                            textPosition = [.08 .92];
-                        end
-                    else
-                        %Display with 0-based channel index
-                        tempChannelNumber = tci(i) - 1;
-                        channelNumberString = num2str(tci(i) - 1);
-                        textPosition = [.08 .92];
-                    end
+                    % actualChannelNumber = tci(i) - 1;
                     
-                    obj.hChanLabels.(dispType)(i) = text('Parent',hAxes(i),'String',channelNumberString,'HandleVisibility','off','FontWeight','bold','Color','k','Units','normalized','Position',textPosition,'HorizontalAlignment','center');
-                    obj.hChanLabels.psth(i) = text('Parent',obj.hPSTHs(i),'String',channelNumberString,'HandleVisibility','off','FontWeight','bold','Color','k','Units','normalized','Position',textPosition,'HorizontalAlignment','center');
+                    %                     if ~isequal(obj.neuralChanDispOrder, obj.neuralChansAvailable) %TOCHECK: May change when channel mapping is fixed/verified, since neuralChanDispOrder likely will include subsetting unlike neuralChansAvailable
+                    %                         %Use channel mapping numbers (if they exist)
+                    %                         tempChannelNumber = obj.neuralChanDispOrder( tci(i) );
+                    %                         if tempChannelNumber ~= tci(i) - 1
+                    %                             channelNumberString = strcat(num2str(tempChannelNumber),' (',num2str(tci(i) - 1),')');
+                    %                             textPosition = [.13 .92];
+                    %                         else
+                    %                             channelNumberString = num2str(tci(i) - 1);
+                    %                             textPosition = [.08 .92];
+                    %                         end
+                    %                     else
+                    %                         %Display with 0-based channel index
+                    %                         tempChannelNumber = tci(i) - 1;
+                    %                         channelNumberString = num2str(tci(i) - 1);
+                    %                         textPosition = [.08 .92];
+                    %                     end                    
+                    
+                    chanLabelString = num2str(obj.neuralChanAcqList(tci(i)));     
+                    textPosition = [.08 .92];               
+                    
+                    obj.hChanLabels.(dispType)(i) = text('Parent',hAxes(i),'String',chanLabelString,'HandleVisibility','off','FontWeight','bold','Color','k','Units','normalized','Position',textPosition,'HorizontalAlignment','center');
+                    obj.hChanLabels.psth(i) = text('Parent',obj.hPSTHs(i),'String',chanLabelString,'HandleVisibility','off','FontWeight','bold','Color','k','Units','normalized','Position',textPosition,'HorizontalAlignment','center');
                 end
                 
                 %Update threshold lines/raster plots, as appropriate
@@ -2728,20 +2731,20 @@ end
             
         end
         
-        function zprvApplySaveChansAndChanMap(obj)
-            
-            if isempty(obj.sglParamCache.snsNiChanMapFile)
-                fprintf('Channel Remapping: no snsNiChanMapFile defined in SpikeGLX, defaulting to standard mapping...\n');
-                obj.neuralChanDispOrder = obj.neuralChansAvailable;
-            else
-                fprintf('Channel Remapping: using snsNiChanMapFile located at: %s\n',obj.sglParamCache.snsNiChanMapFile);
-                obj.neuralChanDispOrder = parseChanMapFile(obj,obj.sglParamCache.snsNiChanMapFile);
-            end
-            
+        function zprvApplySaveChansAndChanMap(obj)         
+ 
             obj.sglSaveChans = obj.sglDeviceFcns.GetSaveChans(obj.hSGL); %save channels as specified in SpikeGLX.
             
             obj.neuralChanAcqList = intersect(obj.sglSaveChans,obj.neuralChansAvailable);
-            obj.neuralChanDispList = obj.neuralChanDispOrder; %TODO: determine is any extra transformation needed here (e.g. combining Save Chan information and Channel Map information)? As is, this is a no-op.
+            
+            if isempty(obj.sglParamCache.snsNiChanMapFile)
+                fprintf('Channel Remapping: no snsNiChanMapFile defined in SpikeGLX, defaulting to standard mapping...\n');
+                obj.neuralChanDispList = obj.neuralChanAcqList;
+            else
+                fprintf('Channel Remapping: using snsNiChanMapFile located at: %s\n',obj.sglParamCache.snsNiChanMapFile);
+                obj.neuralChanDispList = parseChanMapFile(obj,obj.sglParamCache.snsNiChanMapFile); %TODO: verify channel map parsing and its transformation to neuralChanDispList (done as a simple assignment here as a placeholder)
+            end                        
+            
             obj.auxChanProcList = [obj.analogMuxChansAvailable obj.analogSoloChansAvailable]; %TODO: determine if any extra processing is required here 
         end
         
