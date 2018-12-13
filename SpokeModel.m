@@ -2013,12 +2013,16 @@ classdef SpokeModel < most.Model
                     end
                     
                     tmp1 = tic;
-                    %Maintain indices of stored spikes associated with each event, for per-event lookup %TODO: Determine if this speedup is actually apparent/important
+                    %Store indices of spikes associated with each event, for per-event lookup %TODO: Determine if this speedup is actually apparent/important
                     if taggedNewSpike
                         for i=1:length(obj.stimEventTypes_)
+                            %Adjust indices to account for removed spikes
                             taggedSpikeIdxs = taggedSpikeIdxsStruct.(obj.stimEventTypes_{i});
-                            taggedSpikeIdxs(spikesToClear) = [];
+                            for j=1:numel(taggedSpikeIdxs)
+                                taggedSpikeIdxs(j)=taggedSpikeIdxs(j)-sum(spikesToClear<taggedSpikeIdxs(j));
+                            end
                             
+                            %Store adjusted indices
                             obj.reducedData{b}.stimEventTypeStruct.(obj.stimEventTypes_{i}) = [obj.reducedData{b}.stimEventTypeStruct.(obj.stimEventTypes_{i}) taggedSpikeIdxs];
                         end
                     end
