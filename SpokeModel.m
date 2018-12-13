@@ -2523,6 +2523,8 @@ classdef SpokeModel < most.Model
             if ~fileRollover
             end
             
+            obj.zprvResetReducedData();
+            
         end
         
         function zprvResetReducedData(obj)
@@ -2532,7 +2534,7 @@ classdef SpokeModel < most.Model
             
             nnca = numel(obj.neuralChanAcqList);
             
-            obj.lastPlottedWaveformCountSinceClear = zeros(nnca,1);
+            obj.lastPlottedWaveformCountSinceClear = zeros(nnca,1); 
             
             obj.reducedData = cell(nnca,1);
             for i=1:1:nnca
