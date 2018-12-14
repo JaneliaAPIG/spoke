@@ -124,10 +124,10 @@ classdef SpokeModel < most.Model
         
         numActiveTabs;
         
-        sglSaveChans; %SpikeGLX save channels. These are the channels (both neural and non-neural channels) that SpikeGLX both saves and transfers to Spoke.        
+        sglStreamChans; %SpikeGLX streamed channels. These are the channels (both neural and non-neural channels) that SpikeGLX saves and transfers to Spoke. Specified in teh SpikeGLX "Save" tab.        
        
-        neuralChanAcqList; %Ascending list of neural chans within SpikeGLX save chans (sglSaveChans).
-        neuralChanDispList; %Ordered list of neural chans within SpikeGLX save chans (sglSaveChans), specifying display ordering. 
+        neuralChanAcqList; %Ascending list of neural chans within SpikeGLX save chans (sglStreamChans).
+        neuralChanDispList; %Ordered list of neural chans within SpikeGLX save chans (sglStreamChans), specifying display ordering. 
         auxChanProcList; %Ascending list of auxiliary chans (TOCHECK: restricted to within SpikeGLX save chans?)
         
         baselineRMS; %Array of RMS values, one per channel, computed from all non-spike-window scans from within last baselineRMSTime
@@ -290,7 +290,7 @@ classdef SpokeModel < most.Model
             obj.zprvResetReducedData();
             
             %Initialize a default display for appearances (some aspects gets overridden by processing on start())
-            obj.zprvApplySaveChansAndChanMap();
+            obj.zprvApplyStreamChansAndChanMap();
             
             nnca = numel(obj.neuralChanAcqList);
             obj.hThresholdLines = repmat({ones(nnca,1) * -1},2,1);
@@ -893,7 +893,7 @@ classdef SpokeModel < most.Model
                 for i=1:length(tci)
                     % actualChannelNumber = tci(i) - 1;
                     
-                    %                     if ~isequal(obj.neuralChanDispOrder, obj.neuralChansAvailable) %TOCHECK: May change when channel mapping is fixed/verified, since neuralChanDispOrder likely will include subsetting unlike neuralChansAvailable
+                    %                     if ~isequal(obj.neuralChanDispOrder, obj.neuralChansAvailable) %TOCHECK: May change when channel mapping is fixed/verified, since neuralChanDispList may be a subset of acquired and/or available channels
                     %                         %Use channel mapping numbers (if they exist)
                     %                         tempChannelNumber = obj.neuralChanDispOrder( tci(i) );
                     %                         if tempChannelNumber ~= tci(i) - 1
@@ -1031,10 +1031,10 @@ classdef SpokeModel < most.Model
             
             hTimers = obj.hTimer;
             
-            %Apply channel ordering & subsetting, if specified in SpikeGLX
+            %Apply stream channels and channel map(s), as specified in SpikeGLX
             %TODO: Consider to allow further subsetting by Spoke user, to give faster Spoke processing
             obj.zprvAssertAvailChansConstant();
-            obj.zprvApplySaveChansAndChanMap();
+            obj.zprvApplyStreamChansAndChanMap();
             
             %Reset various state vars -- RMS/mean, filterCondition, spike data, etc
             obj.zprvResetAcquisition();
@@ -1467,8 +1467,8 @@ classdef SpokeModel < most.Model
                 
                 %STAGE 1: Read newly available data
                 %[scansToRead, newData] = znstReadAvailableData(obj.maxReadableScanNum-obj.priorfileMaxReadableScanNum-scansToRead,scansToRead); %obj.bufScanNumEnd will be 0 in case of file-rollover or SpikeGL stop/restart
-                %                 newData = GetDAQData(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglSaveChans);
-                newData = obj.sglDeviceFcns.Fetch(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglSaveChans);
+                %                 newData = GetDAQData(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglStreamChans);
+                newData = obj.sglDeviceFcns.Fetch(obj.hSGL,obj.lastMaxReadableScanNum,scansToRead,obj.sglStreamChans);
                 obj.lastMaxReadableScanNum = obj.lastMaxReadableScanNum + scansToRead;
                 t1 = toc(t0);
                 
@@ -1489,7 +1489,7 @@ classdef SpokeModel < most.Model
                 %Housekeeping: Form partialWaveformBuffer, appending new data
                 if ~isempty(obj.waveformWrap)
                     for hiter=1:numel(obj.neuralChanAcqList)
-                        iter = obj.sglSaveChans(hiter)+1;
+                        iter = obj.sglStreamChans(hiter)+1;
                         obj.partialWaveformBuffer{end, iter} = [obj.partialWaveformBuffer{end, iter};newData(1:obj.waveformWrap(end),iter)];
                     end
                 end
@@ -1864,7 +1864,7 @@ classdef SpokeModel < most.Model
                 
                 %Detect & record stimulus start and associated stimulus window
                 %                stimIdx = find(diff(obj.fullDataBuffer(reducedDataBufStartIdx:end,obj.stimStartChannel + 1) > (obj.stimStartThreshold / obj.voltsPerBitNeural)) == 1, 1); %Should not have off-by-one error -- lowest possible value is fullDataBufferStartIdx+1 (if the second sample crosses threshold)
-                stimChanFullDataIdx = find(obj.sglSaveChans==obj.stimStartChannel);
+                stimChanFullDataIdx = find(obj.sglStreamChans==obj.stimStartChannel);
                 % stimIdx = find(diff(obj.fullDataBuffer(reducedDataBufStartIdx:end,stimChanFullDataIdx) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1, 1); %Should not have off-by-one error -- lowest possible value is fullDataBufferStartIdx+1 (if the second sample crosses threshold)
                 %  stimIdx = find(diff(obj.fullDataBuffer(reducedDataBufStartIdx:end,stimChanFullDataIdx)) > (obj.stimStartThreshold / obj.voltsPerBitAux)) == 1; %Should not have off-by-one error -- lowest possible value is fullDataBufferStartIdx+1 (if the second sample crosses threshold)
                 triggerThreshVal = obj.stimStartThreshold / obj.voltsPerBitAux;
@@ -2492,7 +2492,7 @@ classdef SpokeModel < most.Model
             
             nnca = numel(obj.neuralChanAcqList);
             
-            obj.fullDataBuffer = zeros(0, numel(obj.sglSaveChans));
+            obj.fullDataBuffer = zeros(0, numel(obj.sglStreamChans));
             
             if ~fileRollover %&& strcmpi(obj.thresholdType,'rmsMultiple')
                 obj.baselineRMS = zeros(nnca,1);
@@ -2517,7 +2517,7 @@ classdef SpokeModel < most.Model
         function zprvResetReducedData(obj)
             %Method to clear cached spike data; can be either on acquisition 'reset' or in some cases mid-acquisition
             
-            % TODO: Does this work with channel subsets?
+            % TODO: Does this work where neuralChanDispList differes from neuralChanAcqList?
             
             nnca = numel(obj.neuralChanAcqList);
             
@@ -2525,7 +2525,7 @@ classdef SpokeModel < most.Model
             
             obj.reducedData = cell(nnca,1);
             for i=1:1:nnca
-                %for i=1:1:numel(obj.sglSaveChans)
+                %for i=1:1:numel(obj.sglStreamChans)
                 if strcmpi(obj.displayMode,'waveform')
                     obj.reducedData{i} = struct('scanNums',[],'waveforms',{{}});
                 else
@@ -2711,11 +2711,11 @@ classdef SpokeModel < most.Model
             
         end
         
-        function zprvApplySaveChansAndChanMap(obj)         
+        function zprvApplyStreamChansAndChanMap(obj)         
  
-            obj.sglSaveChans = obj.sglDeviceFcns.GetSaveChans(obj.hSGL); %save channels as specified in SpikeGLX.
+            obj.sglStreamChans = obj.sglDeviceFcns.GetSaveChans(obj.hSGL); %save channels as specified in SpikeGLX.
             
-            obj.neuralChanAcqList = intersect(obj.sglSaveChans,obj.neuralChansAvailable);
+            obj.neuralChanAcqList = intersect(obj.sglStreamChans,obj.neuralChansAvailable);
             
             if isempty(obj.sglParamCache.snsNiChanMapFile)
                 fprintf('Channel Remapping: no snsNiChanMapFile defined in SpikeGLX, defaulting to standard mapping...\n');
