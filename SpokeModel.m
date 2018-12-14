@@ -393,7 +393,7 @@ classdef SpokeModel < most.Model
                 %Places axes in panel and configure
                 obj.hPlots(i) = axes('Parent',obj.hPanels.waveform(i),'Position',[0 0 1 1],'XLim',obj.horizontalRange); %,'YLim',obj.verticalRange);
                 obj.hRasters(i) = axes('Parent',obj.hPanels.raster(i),'Position',[0 0 1 1],'XLim',obj.horizontalRangeRaster);
-                obj.hPSTHs(i) = axes('Parent',obj.hPanels.psth(i),'Position',[0 0 1 1]);
+                obj.hPSTHs(i) = axes('Parent',obj.hPanels.psth(i),'Position',[0 0 1 1],'XLim',obj.horizontalRangeRaster);
                 
                 %TODO: Remove this function & just set here
                 obj.zprvSetAxesProps(obj.hPlots(i));
@@ -855,6 +855,7 @@ classdef SpokeModel < most.Model
             set(obj.hRasters,'XLim',val);
             
             obj.zprvClearPlots('psth');
+            set(obj.hPSTHs,'XLim',val);
             
             obj.horizontalRangeRaster = val;
         end
@@ -1263,7 +1264,7 @@ classdef SpokeModel < most.Model
                         
                         axes(obj.hPSTHs(plotCount));
                         if ~isempty(histIdxs)
-                            line('XData',histogramBins(histIdxs),'YData',histData(histIdxs)/(obj.stimEventCount_.(eventType)*scanPeriodBinned),'LineStyle','-','Color',colorOrder(colorIdxs(e),:));
+                            line('XData',histogramBins(histIdxs)*scanPeriod,'YData',histData(histIdxs)/(obj.stimEventCount_.(eventType)*scanPeriodBinned),'LineStyle','-','Color',colorOrder(colorIdxs(e),:));
                         end
                         
                     end
