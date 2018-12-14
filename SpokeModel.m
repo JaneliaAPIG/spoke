@@ -2119,7 +2119,7 @@ classdef SpokeModel < most.Model
                 end
                 
                 [newSpikeScanNums, obj.maxNumWaveformsApplied] = ...
-                    zlclDetectSpikes(obj.reducedData, ...
+                    zlclDetectSpikes(obj.reducedData, ... 
                     obj.fullDataBuffer, ...
                     bufStartScanNum, ...
                     round(obj.spikeRefractoryPeriod * obj.sglParamCache.niSampRate), ...
@@ -2127,9 +2127,10 @@ classdef SpokeModel < most.Model
                     obj.thresholdAbsolute, ...
                     threshMean, ...
                     obj.refreshPeriodMaxNumWaveforms, ...
-                    obj.horizontalRangeScans, ...
                     obj.debug, ...
-                    obj.diagramm); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+                    obj.diagramm ...
+                    ... %obj.horizontalRangeScans %DEPRECATED. Removed spike detection dependence on horizontalRange; no known justification for this dependence at this time.
+                    ); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
                 
                 %             if maxNumWaveformsApplied && ~obj.maxNumWaveformsApplied
                 %               fprintf(2,'WARNING: Exceeded maximum number of spikes (%d) on one or more channels; subsequent spikes were ignored.\n', obj.refreshPeriodMaxNumWaveforms);
@@ -2148,11 +2149,12 @@ classdef SpokeModel < most.Model
                     obj.thresholdAbsolute, ...
                     0, ...
                     obj.refreshPeriodMaxNumWaveforms, ...
-                    obj.horizontalRangeScans, ...
                     obj.debug, ...
-                    obj.diagramm); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
-            end
-            
+                    obj.diagramm ...
+                    ... %obj.horizontalRangeScans %DEPRECATED. Removed spike detection dependence on horizontalRange; no known justification for this dependence at this time.
+                    ); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
+            end         
+                          
         end
         
         function zprvUpdateRasterPlot(obj,chanNewSpikes)
@@ -2785,7 +2787,7 @@ end
 
 
 %% LOCAL FUNCTIONS
-function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedData,fullDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,baselineMean,maxNumSpikes,horizontalRangeScans, debug, diagramm)
+function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedData,fullDataBuffer,bufStartScanNum,postSpikeNumScans,thresholdVal,thresholdAbsolute,baselineMean,maxNumSpikes,debug, diagramm)%,horizontalRangeScans
 %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
 %
 % reducedData: Cell array, one element per channel, containing data for each detected spike (from earlier timer callback period(s))
@@ -2796,11 +2798,13 @@ function [newSpikeScanNums, maxNumWaveformsApplied] = zlclDetectSpikes(reducedDa
 % thresholdAbsolute: Logical. If true, both crossings above thresholdVal or below -thresholdVal are considered spikes.
 % baselineMean: Mean value to subtract from data before detecting threshold crossings.
 % maxNumSpikes: Scalar, indicating max number of spikes to detect per channel (from the start of the fullDataBuffer)
-% horizontalRangeScans: The negative and positive offsets that define the horizontal range of the display in samples.
 % debug: set to true if debugging is activated. This should be equal to obj.debug.
+% diagramm: ...
+% horizontalRangeScans: DEPRECATED. Removed spike detection dependence on horizontalRange; no known justification for this dependence at this time.
 %
 % NOTES:
 %  VI050812: Not clear that recentSpikeScanNums can ever be non-empty -- might be able to get rid of this logic (and reducedData argument) altogether?
+
 maxNumWaveformsApplied = false;
 numChans = length(reducedData);
 newSpikeScanNums = cell(numChans,1);
@@ -2839,11 +2843,9 @@ for h=1:numChans
     %of data. If this value is too small, then there won't be any data in a
     %portion of the user's display.
     
-    currIdx = abs(horizontalRangeScans(1)); %Index into fullDataBuffer.
-    % NOTE: If currIdx is initialized to 1, it will begin spike detection at the very start of the fullDataBuffer.
-    % Doing because it will detect as many spikes as possible. The downside is that it may detect a spike with no
-    % waveform data in the native part of the time window.
-    
+    currIdx = 1;
+    %currIdx = abs(horizontalRangeScans(1)); %DEPRECATED. Removed spike detection dependence on horizontalRange; no known justification for this dependence at this time
+        
     while currIdx < scansToSearch
         %fprintf('currIdx: %d scansToSearch: %d postSpikeNumScans: %d\n',currIdx,scansToSearch,postSpikeNumScans);
         %Find at most one spike (threshold crossing) in the fullDataBuffer
