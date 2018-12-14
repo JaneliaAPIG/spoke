@@ -1264,7 +1264,7 @@ classdef SpokeModel < most.Model
                         
                         axes(obj.hPSTHs(plotCount));
                         if ~isempty(histIdxs)
-                            line('XData',histogramBins(histIdxs),'YData',histData(histIdxs)/(obj.stimEventCount_.(eventType)*scanPeriodBinned),'LineStyle','-','Color',colorOrder(colorIdxs(e),:));
+                            line('XData',histogramBins(histIdxs)*scanPeriod,'YData',histData(histIdxs)/(obj.stimEventCount_.(eventType)*scanPeriodBinned),'LineStyle','-','Color',colorOrder(colorIdxs(e),:));
                         end
                         
                     end
