@@ -48,9 +48,7 @@ classdef SpokeModel < most.Model
         psthAmpRange = [0 120]; %Amplitude range to display, in units of spikes/second
         
         psthTimerPeriod = inf; %Period, in seconds, at which plotPSTH() method is called automatically when displayMode='raster'
-        
-        %channelSubset = inf; %DEPRECATED BY HIDDEN DISPLAYCHANNELS PROP Subset of channels to acquire from
-        
+                
         % The following are properties that were SetAccess=protected, but
         % have been moved out of protected to allow config file saves with
         % most.
@@ -1045,13 +1043,6 @@ classdef SpokeModel < most.Model
             switch obj.displayMode
                 case 'waveform'
                     obj.zprvClearPlots('waveform');
-                    %                     for i=1:numDispChans
-                    %                         handlesToClear = [handlesToClear; obj.hWaveforms{i}(isgraphics(obj.hWaveforms{i}))'];
-                    %                     end
-                    %                     %VI051012: Seems like we should probably clear out obj.hWaveforms here too
-                    %                     %set(handlesToClear,'EraseMode','normal');
-                    %                     delete(handlesToClear);
-                    
                 case 'raster'
                     obj.zprvClearPlots({'raster' 'psth'});
             end
@@ -2132,12 +2123,6 @@ classdef SpokeModel < most.Model
                     ... %obj.horizontalRangeScans %DEPRECATED. Removed spike detection dependence on horizontalRange; no known justification for this dependence at this time.
                     ); %Detect spikes from beginning in all but the spike-window-post time, imposing a 'refractory' period of the spike-window-post time after each detected spike
                 
-                %             if maxNumWaveformsApplied && ~obj.maxNumWaveformsApplied
-                %               fprintf(2,'WARNING: Exceeded maximum number of spikes (%d) on one or more channels; subsequent spikes were ignored.\n', obj.refreshPeriodMaxNumWaveforms);
-                %             end
-                %
-                %             obj.maxNumWaveformsApplied = maxNumWaveformsApplied;
-                
             else
                 threshVal = obj.thresholdVal / obj.voltsPerBitNeural; %Convert to AD units
                 threshMean = 0; %Don't do mean subtraction
@@ -2821,7 +2806,6 @@ end
 
 localspikes = cell(numChans,1);
 
-%for i=1:numChans
 for h=1:numChans
     
     %Determine recent (already detected) spike scan numbers to exclude from spike search
@@ -2835,13 +2819,6 @@ for h=1:numChans
     %Find new spikes one at a time, imposing refractory period
     spikesFound = 0;
     scansToSearch = size(fullDataBuffer,1) - postSpikeNumScans;
-    
-    %maxIdx = bufStartScanNum + scansToSearch;
-    %Since the fullDatabuffer contains historic data, start detection at
-    %the first point at which a theoretical spike at the beginning of the
-    %detection window would have a full negative horizontal range's worth
-    %of data. If this value is too small, then there won't be any data in a
-    %portion of the user's display.
     
     currIdx = 1;
     %currIdx = abs(horizontalRangeScans(1)); %DEPRECATED. Removed spike detection dependence on horizontalRange; no known justification for this dependence at this time
