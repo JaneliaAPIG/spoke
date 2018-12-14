@@ -1425,8 +1425,8 @@ classdef SpokeModel < most.Model
                 
                 numNeuralChans = numel(obj.neuralChanAcqList);
 
-                rmsMultipleThresh = strcmpi(obj.thresholdType,'rmsMultiple');
-                rmsMultipleInitializing = rmsMultipleThresh && obj.baselineRMSLastScan == 0;
+                rmsMultipleActive = isequal(obj.thresholdType,'rmsMultiple') || isequal(obj.waveformAmpUnits,'rmsMultiple');
+                rmsMultipleInitializing = rmsMultipleActive && obj.baselineRMSLastScan == 0;
                 
                 waveformDisplay = strcmpi(obj.displayMode,'waveform'); %either in spike-triggered or stimulus-triggered waveform display mode
                 rasterDisplayMode = strcmpi(obj.displayMode,'raster');
@@ -1590,7 +1590,7 @@ classdef SpokeModel < most.Model
                 t6 = toc(t0);
                 
                 %STAGE 7: Update current baseline stats values (mean & RMS), if needed
-                if (rmsMultipleThresh || obj.filterWindow(1) == 0) && ...
+                if (rmsMultipleActive || obj.filterWindow(1) == 0) && ...
                         (obj.bufScanNumEnd - obj.baselineRMSLastScan) > obj.baselineStatsRefreshPeriodScans % enough time has elapsed since last RMS sampling
                     znstUpdateBaselineStats(newSpikeScanNums,bufStartScanNum);
                 end
