@@ -10,22 +10,5 @@ This Spoke repo is **deprecated** (out of service). It remains only during a tra
 Please visit the new repo for current code, downloads and support: 
 [JaneliaSciComp/spoke](https://github.com/JaneliaSciComp/spoke)
 
-## Downloads
-Version 1.0 link coming soon.
 
-## System Requirements
-
-* Windows: 7, 8.1, 10.
-* SpikeGLX Software ([get it here](http://billkarsh.github.io/SpikeGLX)).
-* MATLAB R2015b & Signal Processing Toolbox
-
-## Installation and Getting Started
-[Visit the Spoke User Guide](http://janeliaapig.github.io/spoke/) for Getting Started and other documentation.
-
-## Developer API
-[Visit the Wiki](https://github.com/JaneliaAPIG/spoke/wiki) for the Developer API and other technical information.
-
-## Credits
-* Vijay Iyer: Initial Implementation & Version 1.0
-* Edward Kang: Version 1.0 
-* Bill Karsh: MATLAB interface to SpikeGLX
+_fin_
